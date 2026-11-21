@@ -1,3 +1,15 @@
+## 5.6.0
+
+New:
+- **Connected Textures in Previews**: in-world build previews, the Block Palette 3D test room (with separate cutout and translucent passes for Connected Glass), and the 3D Shape Generator preview now evaluate neighbor context via a virtual `BlockAndTintGetter` + loader `ModelData`, supporting Fusion, Athena, CTM, Continuity, Rechiseled, Chipped, Factory Blocks, and more.
+- **Palette & Suggester Upgrades**:
+  - **OKLab color space** with chroma weighting and improved handling for neutral grey/black seeds.
+  - **Texture roughness matching**: block color scan now measures luminance variance so suggestions match smooth with smooth and detailed/noisy with detailed.
+  - **From search** toggle: restrict palette suggestions to the current search filter.
+  - **Slot controls**: right-click to pin/unpin slots across rerolls, drag to reorder, scroll to adjust block weight, plus dark-to-light sort (`↕`) and reverse (`⇄`) buttons.
+  - **Cleaner suggestion pool**: filters out ores, falling blocks, TNT, meltable ice, and unobtainable blocks from suggestions while keeping them searchable.
+  - `Shades` and `Contrast` now always keep the starting seed block.
+
 ## 5.5.0
 
 New:

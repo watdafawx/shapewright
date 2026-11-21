@@ -105,6 +105,34 @@ class PaletteTest {
     }
 
     @Test
+    void shadesAndContrastKeepSeedBlock() {
+        List<Swatch> shades = suggest(Mode.SHADES, "terracotta", 4);
+        assertTrue(shades.stream().anyMatch(s -> s.id().equals("terracotta")), "SHADES keeps seed: " + shades);
+        List<Swatch> contrast = suggest(Mode.CONTRAST, "terracotta", 4);
+        assertTrue(contrast.stream().anyMatch(s -> s.id().equals("terracotta")), "CONTRAST keeps seed: " + contrast);
+    }
+
+    @Test
+    void pinnedSlotsArePreservedAcrossRerolls() {
+        List<Swatch> start = List.of(get("terracotta"), get("blue_wool"));
+        Set<String> pinned = Set.of("blue_wool");
+        for (long seed = 0; seed <= 5; seed++) {
+            List<Swatch> out = PaletteSuggester.suggest(Mode.SIMILAR, start, BLOCKS, 4, seed, pinned);
+            assertTrue(out.stream().anyMatch(s -> s.id().equals("blue_wool")), "seed " + seed + " kept pin: " + out);
+        }
+    }
+
+    @Test
+    void roughnessPreferenceBreaksColorTies() {
+        List<Swatch> pool = List.of(
+                new Swatch("seed_rough", 0x606060, 0.35f),
+                new Swatch("smooth_match", 0x686868, 0.02f),
+                new Swatch("rough_match", 0x6A6A6A, 0.34f));
+        List<Swatch> out = PaletteSuggester.suggest(Mode.SIMILAR, List.of(pool.getFirst()), pool, 2, 0);
+        assertEquals("rough_match", out.get(1).id());
+    }
+
+    @Test
     void noiseMakesPatchesUsingEveryBlock() {
         Set<Integer> seen = new HashSet<>();
         int sameAsNeighbor = 0, total = 0;

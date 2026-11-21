@@ -34,6 +34,9 @@ import io.github.watdafawx.shapewright.utilities.BlockEntry;
 import io.github.watdafawx.shapewright.utilities.BlockSet;
 import io.github.watdafawx.shapewright.item.RandomizerToolItem;
 import io.github.watdafawx.shapewright.palette.PaletteClientState;
+import io.github.watdafawx.shapewright.platform.Services;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.world.level.block.RenderShape;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -132,10 +135,10 @@ public class BlockPreviewRenderer {
                     var missingSource = new TintedMultiBufferSource(bufferSource, 255, 80, 80, 200);
                     Set<BlockPos> missingPositions = BuildPipelineClient.ITEM_USAGE.missingPositions;
                     Map<net.minecraft.world.item.Item, BlockState> randomStates = new HashMap<>();
-                    int rendered = 0;
+                    // Resolve preview states up front so connected-texture mods can see neighboring preview blocks
+                    Map<BlockPos, BlockState> previewStates = new java.util.LinkedHashMap<>();
                     for (BlockPos pos : positions) {
-                        if (rendered >= maxPreviews) break;
-                        // Apply per-block mirror/rotation transforms from the modifier pipeline.
+                        if (previewStates.size() >= maxPreviews) break;
                         BlockState state = baseState;
                         BlockEntry entry = blockSet.get(pos);
                         if (entry != null && entry.exactState && entry.blockState != null) {
@@ -149,17 +152,27 @@ public class BlockPreviewRenderer {
                             state = entry.applyTransforms(state);
                             if (entry.camo != null) state = FramedCompat.ghostState(state, entry.camo);
                         }
+                        previewStates.put(pos, state);
+                    }
+                    PreviewBlockGetter previewLevel = new PreviewBlockGetter(mc.level, previewStates);
+                    for (var pe : previewStates.entrySet()) {
+                        BlockPos pos = pe.getKey();
+                        BlockState state = pe.getValue();
                         boolean isMissing = missingPositions.contains(pos);
+                        MultiBufferSource targetSource = isMissing ? missingSource : wrappedSource;
                         poseStack.pushPose();
                         poseStack.translate(pos.getX() - camX, pos.getY() - camY, pos.getZ() - camZ);
                         poseStack.translate(0.5, 0.5, 0.5);
                         poseStack.scale(blockScale, blockScale, blockScale);
                         poseStack.translate(-0.5, -0.5, -0.5);
-                        mc.getBlockRenderer().renderSingleBlock(state, poseStack,
-                                isMissing ? missingSource : wrappedSource,
-                                LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+                        if (state.hasBlockEntity() || state.getRenderShape() != RenderShape.MODEL) {
+                            mc.getBlockRenderer().renderSingleBlock(state, poseStack, targetSource,
+                                    LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+                        } else {
+                            VertexConsumer consumer = targetSource.getBuffer(ItemBlockRenderTypes.getRenderType(state, false));
+                            Services.PLATFORM.renderPreviewBlock(state, pos, previewLevel, poseStack, consumer, false);
+                        }
                         poseStack.popPose();
-                        rendered++;
                     }
                     // Flush all render types — entity-rendered blocks (beds, chests)
                     // may use types other than translucent().

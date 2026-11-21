@@ -13,7 +13,10 @@ import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.EmptyBlockGetter;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.FallingBlock;
+import net.minecraft.world.level.block.IceBlock;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.TntBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import io.github.watdafawx.shapewright.Constants;
 
@@ -36,6 +39,8 @@ public final class BlockColorCache {
     private static final Gson GSON = new Gson();
 
     private static volatile Map<Item, Integer> colors = Map.of();
+    /** Texture roughness (luminance std-dev in 0..1) per block, for texture-matched suggestions. */
+    private static volatile Map<Item, Float> roughness = Map.of();
     /** Texture each color came from; blocks sharing a texture are copies of each other. */
     private static volatile Map<Item, ResourceLocation> textures = Map.of();
     private static Map<Item, Integer> distinctFor = null;
@@ -90,6 +95,27 @@ public final class BlockColorCache {
         return colors.getOrDefault(item, 0x808080);
     }
 
+    /** Texture roughness (0 = flat, ~0.4 = very noisy), falling back to 0.15 when unknown. */
+    public static float roughnessOf(Item item) {
+        return roughness.getOrDefault(item, 0.15f);
+    }
+
+    /**
+     * Filters out blocks that make poor building-palette suggestions (ores, falling blocks,
+     * TNT, meltable ice, unobtainable/creative blocks) while leaving them searchable in the grid.
+     */
+    public static boolean isSuggestible(Item item) {
+        if (!(item instanceof BlockItem bi)) return false;
+        Block block = bi.getBlock();
+        if (block instanceof FallingBlock || block instanceof TntBlock || block instanceof IceBlock) return false;
+        String path = BuiltInRegistries.ITEM.getKey(item).getPath();
+        if (path.endsWith("_ore") || path.contains("_ore_") || path.startsWith("ore_")) return false;
+        if (path.contains("command_block") || path.contains("structure_") || path.contains("jigsaw")) return false;
+        if (path.equals("barrier") || path.equals("bedrock") || path.contains("spawner")
+                || path.contains("budding_") || path.contains("reinforced_deepslate")) return false;
+        return true;
+    }
+
     /** Loads the saved colors if they match the current packs, otherwise scans. Call on the render thread. */
     public static void ensureReady() {
         if (loaded || scanning) return;
@@ -130,13 +156,17 @@ public final class BlockColorCache {
         scanning = true;
         String key = packsKey();
         Map<Item, ResourceLocation> sprites = new HashMap<>();
+        Map<Item, Float> roughMap = new HashMap<>();
         CompletableFuture.supplyAsync(() -> {
             Map<Item, Integer> result = new LinkedHashMap<>();
-            Map<ResourceLocation, Optional<Integer>> byTexture = new HashMap<>(); // shared textures are read once
+            Map<ResourceLocation, Optional<long[]>> byTexture = new HashMap<>(); // shared textures are read once
             for (Job job : jobs) {
-                Integer rgb = byTexture.computeIfAbsent(job.texture(), t -> Optional.ofNullable(averageColor(mc, t))).orElse(null);
-                if (rgb == null) continue;
+                long[] stats = byTexture.computeIfAbsent(job.texture(), t -> Optional.ofNullable(textureStats(mc, t))).orElse(null);
+                if (stats == null) continue;
+                int rgb = (int) stats[0];
+                float rgh = Float.intBitsToFloat((int) stats[1]);
                 result.put(job.item(), job.tint() == -1 ? rgb : multiply(rgb, job.tint()));
+                roughMap.put(job.item(), rgh);
                 sprites.put(job.item(), job.sprite());
             }
             return result;
@@ -147,32 +177,43 @@ public final class BlockColorCache {
                 return;
             }
             textures = Collections.unmodifiableMap(sprites);
+            roughness = Collections.unmodifiableMap(roughMap);
             colors = Collections.unmodifiableMap(result);
-            saveToFile(result, sprites, key);
+            saveToFile(result, roughMap, sprites, key);
             Constants.LOG.info("[Shapewright] Scanned colors of {} blocks", result.size());
         });
     }
 
-    /** Alpha-weighted average of the texture's first frame, or null if unreadable or mostly transparent. */
-    private static Integer averageColor(Minecraft mc, ResourceLocation texture) {
+    /** Alpha-weighted average RGB + luminance std-dev (roughness) of the texture's first frame, or null if unreadable/mostly transparent. */
+    private static long[] textureStats(Minecraft mc, ResourceLocation texture) {
         Optional<Resource> resource = mc.getResourceManager().getResource(texture);
         if (resource.isEmpty()) return null;
         try (InputStream in = resource.get().open(); NativeImage image = NativeImage.read(in)) {
             int size = Math.min(image.getWidth(), image.getHeight()); // animated textures stack frames vertically
             long r = 0, g = 0, b = 0, weight = 0;
+            double lumSum = 0, lumSqSum = 0;
             for (int y = 0; y < size; y++) {
                 for (int x = 0; x < size; x++) {
                     int abgr = image.getPixelRGBA(x, y);
                     int a = (abgr >>> 24) & 0xFF;
                     if (a < 128) continue;
-                    r += abgr & 0xFF;
-                    g += (abgr >> 8) & 0xFF;
-                    b += (abgr >> 16) & 0xFF;
+                    int pr = abgr & 0xFF;
+                    int pg = (abgr >> 8) & 0xFF;
+                    int pb = (abgr >> 16) & 0xFF;
+                    r += pr;
+                    g += pg;
+                    b += pb;
+                    double lum = (0.2126 * pr + 0.7152 * pg + 0.0722 * pb) / 255.0;
+                    lumSum += lum;
+                    lumSqSum += lum * lum;
                     weight++;
                 }
             }
             if (weight < size * size / 4) return null;
-            return (int) (r / weight) << 16 | (int) (g / weight) << 8 | (int) (b / weight);
+            int rgb = (int) (r / weight) << 16 | (int) (g / weight) << 8 | (int) (b / weight);
+            double mean = lumSum / weight;
+            float stdDev = (float) Math.sqrt(Math.max(0.0, lumSqSum / weight - mean * mean));
+            return new long[]{rgb, Float.floatToRawIntBits(stdDev)};
         } catch (Exception e) {
             return null;
         }
@@ -188,7 +229,7 @@ public final class BlockColorCache {
     /** Identifies the resource packs and blocks the saved colors belong to. */
     private static String packsKey() {
         Minecraft mc = Minecraft.getInstance();
-        return "v2|" + String.join(",", mc.getResourcePackRepository().getSelectedIds()) + "|" + BuiltInRegistries.BLOCK.size();
+        return "v3|" + String.join(",", mc.getResourcePackRepository().getSelectedIds()) + "|" + BuiltInRegistries.BLOCK.size();
     }
 
     private static boolean loadFromFile() {
@@ -197,20 +238,25 @@ public final class BlockColorCache {
             JsonObject root = GSON.fromJson(Files.readString(FILE), JsonObject.class);
             if (!packsKey().equals(root.get("packs").getAsString())) return false;
             Map<Item, Integer> result = new LinkedHashMap<>();
+            Map<Item, Float> roughMap = new HashMap<>();
             Map<Item, ResourceLocation> sprites = new HashMap<>();
             for (var e : root.getAsJsonObject("colors").entrySet()) {
                 ResourceLocation id = ResourceLocation.tryParse(e.getKey());
                 if (id == null) continue;
-                String[] value = e.getValue().getAsString().split(" ", 2); // "rrggbb texture"
+                String[] value = e.getValue().getAsString().split(" ", 3); // "rrggbb rough texture"
                 BuiltInRegistries.ITEM.getOptional(id).ifPresent(item -> {
                     result.put(item, Integer.parseInt(value[0], 16));
                     if (value.length > 1) {
-                        ResourceLocation t = ResourceLocation.tryParse(value[1]);
+                        try { roughMap.put(item, Float.parseFloat(value[1])); } catch (NumberFormatException ignored) {}
+                    }
+                    if (value.length > 2) {
+                        ResourceLocation t = ResourceLocation.tryParse(value[2]);
                         if (t != null) sprites.put(item, t);
                     }
                 });
             }
             textures = Collections.unmodifiableMap(sprites);
+            roughness = Collections.unmodifiableMap(roughMap);
             colors = Collections.unmodifiableMap(result);
             return !result.isEmpty();
         } catch (Exception e) {
@@ -218,12 +264,12 @@ public final class BlockColorCache {
         }
     }
 
-    private static void saveToFile(Map<Item, Integer> result, Map<Item, ResourceLocation> sprites, String key) {
+    private static void saveToFile(Map<Item, Integer> result, Map<Item, Float> roughMap, Map<Item, ResourceLocation> sprites, String key) {
         JsonObject root = new JsonObject();
         root.addProperty("packs", key);
         JsonObject map = new JsonObject();
         result.forEach((item, rgb) -> map.addProperty(BuiltInRegistries.ITEM.getKey(item).toString(),
-                String.format("%06x %s", rgb, sprites.get(item))));
+                String.format(Locale.ROOT, "%06x %.3f %s", rgb, roughMap.getOrDefault(item, 0.15f), sprites.get(item))));
         root.add("colors", map);
         try {
             Files.createDirectories(FILE.getParent());

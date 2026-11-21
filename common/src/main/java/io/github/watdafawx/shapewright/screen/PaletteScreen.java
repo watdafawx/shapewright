@@ -19,7 +19,9 @@ import io.wispforest.owo.ui.core.Sizing;
 import io.wispforest.owo.ui.core.Surface;
 import io.wispforest.owo.ui.core.VerticalAlignment;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.LightTexture;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.Sheets;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.client.resources.language.I18n;
@@ -33,6 +35,8 @@ import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.state.BlockState;
 import io.github.watdafawx.shapewright.palette.*;
+import io.github.watdafawx.shapewright.platform.Services;
+import io.github.watdafawx.shapewright.render.PreviewBlockGetter;
 import io.github.watdafawx.shapewright.shape.ShapeClientState;
 import io.github.watdafawx.shapewright.palette.PaletteSuggester.Mode;
 import io.github.watdafawx.shapewright.palette.PaletteSuggester.Swatch;
@@ -70,6 +74,8 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
     private Tab listScrollTab;
     private final BlockGrid grid = new BlockGrid();
     private int suggestCount = 5;
+    private boolean suggestFromSearch = false;
+    private final Set<Item> pinned = new HashSet<>();
     private Mode lastMode = null;
     private long rerollSeed = 0;
     private List<Item> suggestion = List.of();
@@ -163,6 +169,13 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         });
         copies.setMessage(hideCopiesText());
         searchRow.child(w(copies));
+        ButtonComponent fromSearch = Components.button(Component.empty(), b -> {});
+        fromSearch.onPress(b -> {
+            suggestFromSearch = !suggestFromSearch;
+            b.setMessage(fromSearchText());
+        });
+        fromSearch.setMessage(fromSearchText());
+        searchRow.child(w(fromSearch).tooltip(Component.translatable("shapewright.screen.palette_from_search.description")));
         searchRow.child(w(Components.button(Component.translatable("shapewright.screen.palette_rescan"), b -> BlockColorCache.scan()))
                 .tooltip(Component.translatable("shapewright.screen.palette_rescan.description")));
         status = label(Component.empty(), 0xAAAAAA);
@@ -195,6 +208,10 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
 
     private Component hideCopiesText() {
         return Component.literal((grid.hideCopies() ? "☑ " : "☐ ") + I18n.get("shapewright.screen.palette_hide_copies"));
+    }
+
+    private Component fromSearchText() {
+        return Component.literal((suggestFromSearch ? "☑ " : "☐ ") + I18n.get("shapewright.screen.palette_from_search"));
     }
 
     /** Rebuilds everything that depends on the palette, the suggestion or the tab. */
@@ -230,10 +247,17 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
             buttons.gap(4);
             buttons.child(w(Components.button(Component.translatable("shapewright.screen.palette_add_held"), b -> addHeld())));
             buttons.child(w(Components.button(Component.translatable("shapewright.screen.palette_clear"), b -> {
+                pinned.clear();
                 palette = palette.withCustom(List.of());
                 apply();
                 refresh();
             })));
+            buttons.child(w(Components.button(Component.literal("↕"), b -> sortCustomByLightness()))
+                    .sizing(Sizing.fixed(16), Sizing.fixed(16))
+                    .tooltip(Component.translatable("shapewright.screen.palette_sort_lightness.description")));
+            buttons.child(w(Components.button(Component.literal("⇄"), b -> reverseCustom()))
+                    .sizing(Sizing.fixed(16), Sizing.fixed(16))
+                    .tooltip(Component.translatable("shapewright.screen.palette_reverse.description")));
             left.child(buttons);
         }
 
@@ -458,6 +482,24 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         }
     }
 
+    private void sortCustomByLightness() {
+        List<Item> custom = new ArrayList<>(palette.custom());
+        if (custom.size() < 2) return;
+        custom.sort(Comparator.comparingDouble(i -> PaletteSuggester.lab(BlockColorCache.colorOf(i))[0]));
+        palette = palette.withCustom(custom);
+        apply();
+        fillLeft();
+    }
+
+    private void reverseCustom() {
+        List<Item> custom = new ArrayList<>(palette.custom());
+        if (custom.size() < 2) return;
+        Collections.reverse(custom);
+        palette = palette.withCustom(custom);
+        apply();
+        fillLeft();
+    }
+
     /** Runs a strategy from the palette's blocks (or the held block when it has none). */
     private void suggest(Mode mode) {
         lastMode = mode;
@@ -471,9 +513,20 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
             Item held = minecraft.player.getMainHandItem().getItem();
             if (colors.containsKey(held)) start.add(swatch(held, colors.get(held)));
         }
-        // Suggestions never offer copies of the same block
+        // Suggestions pull from current search filter when enabled, otherwise from all distinct suggestible blocks
         List<Swatch> all = new ArrayList<>();
-        BlockColorCache.distinctColors().forEach((item, rgb) -> all.add(swatch(item, rgb)));
+        if (suggestFromSearch && !grid.search().isBlank()) {
+            for (Item item : grid.items()) {
+                Integer rgb = colors.get(item);
+                if (rgb != null) all.add(swatch(item, rgb));
+            }
+        } else {
+            BlockColorCache.distinctColors().forEach((item, rgb) -> {
+                if (BlockColorCache.isSuggestible(item)) all.add(swatch(item, rgb));
+            });
+        }
+        Set<String> pinnedIds = new HashSet<>();
+        for (Item item : pinned) pinnedIds.add(BuiltInRegistries.ITEM.getKey(item).toString());
         if (all.isEmpty() || start.isEmpty() && mode != Mode.SURPRISE) {
             suggestion = List.of();
             suggestionNote = I18n.get(all.isEmpty() ? "shapewright.screen.palette_scanning"
@@ -481,7 +534,7 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         } else {
             if (start.isEmpty()) start.add(all.getFirst());
             List<Item> out = new ArrayList<>();
-            for (Swatch w : PaletteSuggester.suggest(mode, start, all, suggestCount, rerollSeed)) {
+            for (Swatch w : PaletteSuggester.suggest(mode, start, all, suggestCount, rerollSeed, pinnedIds)) {
                 BuiltInRegistries.ITEM.getOptional(ResourceLocation.parse(w.id())).ifPresent(out::add);
             }
             suggestion = out;
@@ -491,7 +544,7 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
     }
 
     private static Swatch swatch(Item item, int rgb) {
-        return new Swatch(BuiltInRegistries.ITEM.getKey(item).toString(), rgb);
+        return new Swatch(BuiltInRegistries.ITEM.getKey(item).toString(), rgb, BlockColorCache.roughnessOf(item));
     }
 
     private List<Item> currentBlocks() {
@@ -541,9 +594,11 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         }
     }
 
-    /** Hotbar slots to toggle, or the picked blocks (click one to remove it). */
+    /** Hotbar slots to toggle, or picked blocks (click: remove, drag: reorder, right-click: pin, scroll: weight). */
     private class SlotsComponent extends ItemTooltips {
         private static final int PER_ROW = 8;
+        private int dragIndex = -1;
+        private boolean dragged = false;
 
         SlotsComponent() {
             int rows = palette.source() == BlockPalette.Source.HOTBAR ? 1 : Math.max(1, (palette.custom().size() + PER_ROW - 1) / PER_ROW);
@@ -568,7 +623,9 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
                 List<Item> custom = palette.custom();
                 for (int i = 0; i < Math.max(custom.size(), 1); i++) {
                     int sx = x + (i % PER_ROW) * SLOT, sy = y + (i / PER_ROW) * SLOT;
-                    g.fill(sx, sy, sx + SLOT - 2, sy + SLOT - 2, 0xFF303030);
+                    boolean isPinned = i < custom.size() && pinned.contains(custom.get(i));
+                    g.fill(sx, sy, sx + SLOT - 2, sy + SLOT - 2, isPinned ? 0xFF4A3D1F : 0xFF303030);
+                    if (isPinned) g.renderOutline(sx, sy, SLOT - 2, SLOT - 2, 0xFFFFD23F);
                     if (i < custom.size()) {
                         g.renderItem(new ItemStack(custom.get(i)), sx + 1, sy + 1);
                         if (over(mouseX, mouseY, sx, sy)) hoveredItem = custom.get(i);
@@ -578,8 +635,30 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         }
 
         @Override
-        public boolean onMouseDown(double mouseX, double mouseY, int button) {
+        public void drawTooltip(OwoUIDrawContext context, int mouseX, int mouseY, float partialTicks, float delta) {
+            if (hoveredItem == null) return;
+            var mc = net.minecraft.client.Minecraft.getInstance();
+            if (palette.source() == BlockPalette.Source.CUSTOM) {
+                List<Component> lines = new ArrayList<>();
+                lines.add(new ItemStack(hoveredItem).getHoverName());
+                lines.add(Component.translatable("shapewright.screen.palette_slot_controls")
+                        .withStyle(net.minecraft.ChatFormatting.GRAY));
+                context.renderComponentTooltip(mc.font, lines, mouseX, mouseY);
+            } else {
+                super.drawTooltip(context, mouseX, mouseY, partialTicks, delta);
+            }
+        }
+
+        private int slotAt(double mouseX, double mouseY) {
             int col = (int) mouseX / SLOT, row = (int) mouseY / SLOT;
+            if (col < 0 || col >= PER_ROW || row < 0) return -1;
+            int i = row * PER_ROW + col;
+            return i >= 0 && i < palette.custom().size() ? i : -1;
+        }
+
+        @Override
+        public boolean onMouseDown(double mouseX, double mouseY, int button) {
+            int col = (int) mouseX / SLOT;
             if (palette.source() == BlockPalette.Source.HOTBAR) {
                 if (col >= 0 && col < Inventory.getSelectionSize()) {
                     palette = palette.withHotbarSlots(palette.hotbarSlots() ^ (1 << col));
@@ -587,17 +666,87 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
                     return true;
                 }
             } else {
-                int i = row * PER_ROW + col;
-                if (col < PER_ROW && i >= 0 && i < palette.custom().size()) {
+                int i = slotAt(mouseX, mouseY);
+                if (i >= 0) {
+                    if (button == 1) {
+                        Item item = palette.custom().get(i);
+                        if (!pinned.remove(item)) pinned.add(item);
+                        return true;
+                    }
+                    if (button == 0) {
+                        dragIndex = i;
+                        dragged = false;
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        @Override
+        public boolean onMouseDrag(double mouseX, double mouseY, double deltaX, double deltaY, int button) {
+            if (palette.source() == BlockPalette.Source.CUSTOM && dragIndex >= 0) {
+                int target = slotAt(mouseX, mouseY);
+                if (target >= 0 && target != dragIndex) {
                     List<Item> custom = new ArrayList<>(palette.custom());
+                    Item moved = custom.remove(dragIndex);
+                    custom.add(target, moved);
+                    palette = palette.withCustom(custom);
+                    apply();
+                    dragIndex = target;
+                    dragged = true;
+                }
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public boolean onMouseUp(double mouseX, double mouseY, int button) {
+            if (palette.source() == BlockPalette.Source.CUSTOM && dragIndex >= 0) {
+                int idx = dragIndex;
+                boolean wasDragged = dragged;
+                dragIndex = -1;
+                dragged = false;
+                if (!wasDragged && idx < palette.custom().size()) {
+                    List<Item> custom = new ArrayList<>(palette.custom());
+                    Item removed = custom.remove(idx);
+                    if (!custom.contains(removed)) pinned.remove(removed);
+                    palette = palette.withCustom(custom);
+                    apply();
+                    fillLeft();
+                }
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public boolean onMouseScroll(double mouseX, double mouseY, double amount) {
+            if (palette.source() != BlockPalette.Source.CUSTOM) return false;
+            int i = slotAt(mouseX, mouseY);
+            if (i < 0) return false;
+            List<Item> custom = new ArrayList<>(palette.custom());
+            Item item = custom.get(i);
+            if (amount > 0) {
+                if (custom.size() < BlockPalette.MAX_CUSTOM) {
+                    custom.add(i + 1, item);
+                    palette = palette.withCustom(custom);
+                    apply();
+                    fillLeft();
+                }
+            } else {
+                // Remove one duplicate of this item (keep at least 1 copy)
+                int count = 0;
+                for (Item it : custom) if (it == item) count++;
+                if (count > 1) {
                     custom.remove(i);
                     palette = palette.withCustom(custom);
                     apply();
                     fillLeft();
-                    return true;
                 }
             }
-            return false;
+            return true;
         }
     }
 
@@ -704,23 +853,44 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
             pose.mulPose(Axis.YP.rotationDegrees(yaw));
             pose.translate(-size / 2f, -height3d / 2f, -size / 2f);
             Lighting.setupFor3DItems();
-            var dispatcher = minecraft.getBlockRenderer();
-            VertexConsumer buffer = g.bufferSource().getBuffer(Sheets.cutoutBlockSheet());
-            Map<Item, float[]> tints = new HashMap<>();
+            Map<BlockPos, BlockState> roomStates = new LinkedHashMap<>();
             for (int[] c : cells) {
                 int index = palette.pattern().index(blocks.size(), palette.band(), c[0], c[1], c[2], 0, height3d - 1,
                         BlockPos.asLong(c[0], c[1], c[2]));
                 Item item = blocks.get(index);
-                if (!(item instanceof BlockItem blockItem)) continue;
-                BlockState state = blockItem.getBlock().defaultBlockState();
-                float[] tint = tints.computeIfAbsent(item, i -> blockTint(state));
+                if (item instanceof BlockItem blockItem) {
+                    roomStates.put(new BlockPos(c[0], c[1], c[2]), blockItem.getBlock().defaultBlockState());
+                }
+            }
+            PreviewBlockGetter previewLevel = new PreviewBlockGetter(null, roomStates);
+            // Two passes: opaque/cutout first, then translucent (e.g. Connected Glass) so alpha blends cleanly
+            VertexConsumer cutoutBuf = g.bufferSource().getBuffer(Sheets.cutoutBlockSheet());
+            List<Map.Entry<BlockPos, BlockState>> translucent = new ArrayList<>();
+            for (var e : roomStates.entrySet()) {
+                BlockPos pos = e.getKey();
+                BlockState state = e.getValue();
+                if (ItemBlockRenderTypes.getChunkRenderType(state) == RenderType.translucent()) {
+                    translucent.add(e);
+                    continue;
+                }
                 pose.pushPose();
-                pose.translate(c[0], c[1], c[2]);
-                dispatcher.getModelRenderer().renderModel(pose.last(), buffer, state, dispatcher.getBlockModel(state),
-                        tint[0], tint[1], tint[2], LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
+                pose.translate(pos.getX(), pos.getY(), pos.getZ());
+                Services.PLATFORM.renderPreviewBlock(state, pos, previewLevel, pose, cutoutBuf, true);
                 pose.popPose();
             }
             g.flush();
+            if (!translucent.isEmpty()) {
+                VertexConsumer transBuf = g.bufferSource().getBuffer(Sheets.translucentCullBlockSheet());
+                for (var e : translucent) {
+                    BlockPos pos = e.getKey();
+                    BlockState state = e.getValue();
+                    pose.pushPose();
+                    pose.translate(pos.getX(), pos.getY(), pos.getZ());
+                    Services.PLATFORM.renderPreviewBlock(state, pos, previewLevel, pose, transBuf, true);
+                    pose.popPose();
+                }
+                g.flush();
+            }
             pose.popPose();
             g.disableScissor();
             // Menus and tooltips drawn later must not hide behind the blocks

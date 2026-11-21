@@ -24,7 +24,10 @@ import io.github.watdafawx.shapewright.config.ServerConfig;
 import io.github.watdafawx.shapewright.palette.BlockColorCache;
 import io.github.watdafawx.shapewright.palette.BlockPalette;
 import io.github.watdafawx.shapewright.palette.PaletteClientState;
+import io.github.watdafawx.shapewright.platform.Services;
+import io.github.watdafawx.shapewright.render.PreviewBlockGetter;
 import io.github.watdafawx.shapewright.shape.*;
+import net.minecraft.client.renderer.block.model.BakedQuad;
 import io.github.watdafawx.shapewright.shape.ShapeGenerator.Cell;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -323,8 +326,8 @@ public final class ShapePreview {
                 for (int pass = 0; pass < 2; pass++) {
                     for (int k = 0; k < 4; k++) {
                         int v = pass == 0 ? k : 3 - k;
-                        float u = sprite.getU0() + (sprite.getU1() - sprite.getU0()) * f[13 + v * 2];
-                        float t = sprite.getV0() + (sprite.getV1() - sprite.getV0()) * f[14 + v * 2];
+                        float u = f[13 + v * 2];
+                        float t = f[14 + v * 2];
                         textured.addVertex(matrix, f[v * 3], f[v * 3 + 1], f[v * 3 + 2]).setColor(color).setUv(u, t)
                                 .setLight(net.minecraft.client.renderer.LightTexture.FULL_BRIGHT);
                     }
@@ -441,6 +444,7 @@ public final class ShapePreview {
 
         // Neighbor offset, brightness, and the four corners of that face on a unit cube
         int[][] dirs = {{0, 1, 0}, {0, -1, 0}, {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1}};
+        Direction[] mcDirs = {Direction.UP, Direction.DOWN, Direction.EAST, Direction.WEST, Direction.SOUTH, Direction.NORTH};
         float[] light = {1f, 0.5f, 0.8f, 0.8f, 0.65f, 0.65f};
         float[][][] corners = {
                 {{0, 1, 0}, {0, 1, 1}, {1, 1, 1}, {1, 1, 0}},
@@ -449,34 +453,68 @@ public final class ShapePreview {
                 {{0, 0, 0}, {0, 0, 1}, {0, 1, 1}, {0, 1, 0}},
                 {{0, 0, 1}, {1, 0, 1}, {1, 1, 1}, {0, 1, 1}},
                 {{0, 0, 0}, {0, 1, 0}, {1, 1, 0}, {1, 0, 0}}};
-        // Local texture coordinates (0 or 1) of each face corner: top/bottom use x,z; sides use the horizontal axis and 1 - y
+        // Virtual level so connected-texture mods resolve neighbor connections in the 3D GUI preview
+        Map<BlockPos, BlockState> cellStates = new HashMap<>();
+        for (Cell c : shown) {
+            BlockState st = cellState(params, c, minY, maxY);
+            if (st != null) cellStates.put(new BlockPos(c.x(), c.y(), c.z()), st);
+        }
+        PreviewBlockGetter previewLevel = new PreviewBlockGetter(null, cellStates);
+        Minecraft mc = Minecraft.getInstance();
         List<float[]> out = new ArrayList<>();
         List<TextureAtlasSprite> sprites = new ArrayList<>();
         for (Cell c : shown) {
-            BlockState state = cellState(params, c, minY, maxY);
-            FaceTex[] tex = state != null ? texturesFor(state) : null;
+            BlockPos pos = new BlockPos(c.x(), c.y(), c.z());
+            BlockState state = cellStates.get(pos);
             boolean topLayer = layer >= 0 && c.y() - minY == layer;
             float checker = ((c.x() + c.y() + c.z()) & 1) == 1 ? 0.88f : 1f; // alternating shades make blocks countable
+            float dim = layer >= 0 && !topLayer ? 0.6f : 1f; // layers below the chosen one are dimmed
+            Integer label = labels.get(c);
             for (int d = 0; d < 6; d++) {
                 if (shown.contains(new Cell(c.x() + dirs[d][0], c.y() + dirs[d][1], c.z() + dirs[d][2]))) continue;
+                if (state != null) {
+                    List<BakedQuad> quads = faceQuads(state, pos, previewLevel, mcDirs[d]);
+                    if (!quads.isEmpty()) {
+                        for (BakedQuad quad : quads) {
+                            float[] f = new float[21];
+                            int[] verts = quad.getVertices();
+                            for (int v = 0; v < 4; v++) {
+                                int off = v * 8;
+                                f[v * 3] = c.x() + Float.intBitsToFloat(verts[off]);
+                                f[v * 3 + 1] = c.y() + Float.intBitsToFloat(verts[off + 1]);
+                                f[v * 3 + 2] = c.z() + Float.intBitsToFloat(verts[off + 2]);
+                                f[13 + v * 2] = Float.intBitsToFloat(verts[off + 4]);
+                                f[14 + v * 2] = Float.intBitsToFloat(verts[off + 5]);
+                            }
+                            int base = quadTint(mc, state, quad);
+                            if (label != null && label == highlight) base = mix(base, 0x3FA9FF, 0.55f);
+                            f[12] = shade(base, light[d] * dim);
+                            out.add(f);
+                            sprites.add(quad.getSprite());
+                        }
+                        continue;
+                    }
+                }
                 float[] f = new float[21];
+                FaceTex ft = state != null ? texturesFor(state)[d] : null;
+                TextureAtlasSprite sp = ft != null ? ft.sprite() : null;
                 for (int v = 0; v < 4; v++) {
                     f[v * 3] = c.x() + corners[d][v][0];
                     f[v * 3 + 1] = c.y() + corners[d][v][1];
                     f[v * 3 + 2] = c.z() + corners[d][v][2];
                     float[] k = corners[d][v];
-                    f[13 + v * 2] = d < 2 || d >= 4 ? k[0] : k[2];
-                    f[14 + v * 2] = d < 2 ? k[2] : 1 - k[1];
+                    float lu = d < 2 || d >= 4 ? k[0] : k[2];
+                    float lv = d < 2 ? k[2] : 1 - k[1];
+                    if (sp != null) {
+                        f[13 + v * 2] = sp.getU0() + (sp.getU1() - sp.getU0()) * lu;
+                        f[14 + v * 2] = sp.getV0() + (sp.getV1() - sp.getV0()) * lv;
+                    }
                 }
-                float dim = layer >= 0 && !topLayer ? 0.6f : 1f; // layers below the chosen one are dimmed
-                FaceTex ft = tex != null ? tex[d] : null;
-                if (ft != null && ft.sprite() != null) {
-                    // Real texture: tint (grass, leaves) and the edited-part highlight multiply it, no checker shading
+                if (sp != null) {
                     int base = ft.tint();
-                    Integer label = labels.get(c);
                     if (label != null && label == highlight) base = mix(base, 0x3FA9FF, 0.55f);
                     f[12] = shade(base, light[d] * dim);
-                    sprites.add(ft.sprite());
+                    sprites.add(sp);
                 } else {
                     f[12] = shade(cellColor(params, c, minY, maxY), light[d] * checker * dim);
                     sprites.add(null);
@@ -486,6 +524,29 @@ public final class ShapePreview {
         }
         faces = out.toArray(new float[0][]);
         faceSprites = sprites.toArray(new TextureAtlasSprite[0]);
+    }
+
+    private static List<BakedQuad> faceQuads(BlockState state, BlockPos pos, PreviewBlockGetter level, Direction dir) {
+        try {
+            List<BakedQuad> quads = Services.PLATFORM.getPreviewQuads(state, pos, level, dir);
+            if (quads.isEmpty()) {
+                quads = Services.PLATFORM.getPreviewQuads(state, pos, level, null).stream()
+                        .filter(q -> q.getDirection() == dir).toList();
+            }
+            return quads;
+        } catch (RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    private static int quadTint(Minecraft mc, BlockState state, BakedQuad quad) {
+        if (!quad.isTinted()) return 0xFFFFFF;
+        try {
+            int color = mc.getBlockColors().getColor(state, null, null, quad.getTintIndex());
+            if (color != -1) return color & 0xFFFFFF;
+        } catch (RuntimeException ignored) {
+        }
+        return 0xFFFFFF;
     }
 
     /** Slice (or projection when all layers) through the chosen plane. */
