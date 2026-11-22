@@ -73,12 +73,12 @@ public class PixelArtScreen extends Screen {
         widgets.clear();
         int x = panelX() + 6, y = panelY() + 22, bw = 150;
 
-        addRenderableWidget(Button.builder(Component.literal(images.isEmpty() ? I18n.get("shapewright.screen.pixel_art_no_images")
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.literal(images.isEmpty() ? I18n.get("shapewright.screen.pixel_art_no_images")
                                 : images.get(imageIndex)),
                         b -> { if (!images.isEmpty()) imageIndex = (imageIndex + 1) % images.size(); rebuildWidgets(); })
                 .tooltip(Tooltip.create(Component.translatable("shapewright.screen.pixel_art_file.description")))
                 .bounds(x + ScreenWidgets.LABEL_W, y, bw, 16).build());
-        addRenderableWidget(Button.builder(Component.translatable("shapewright.screen.pixel_art_open_folder"), b -> {
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.translatable("shapewright.screen.pixel_art_open_folder"), b -> {
                     try {
                         Files.createDirectories(FOLDER);
                         Util.getPlatform().openFile(FOLDER.toFile());
@@ -90,18 +90,18 @@ public class PixelArtScreen extends Screen {
         y += 22;
         widgets.addIntField(x, y, String.valueOf(artWidth), v -> artWidth = Math.max(2, Math.min(256, v)));
         y += 22;
-        addRenderableWidget(Button.builder(Component.translatable("shapewright.screen.pixel_art_layout." + layout.name().toLowerCase()),
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.translatable("shapewright.screen.pixel_art_layout." + layout.name().toLowerCase()),
                 b -> { layout = next(Layout.values(), layout); rebuildWidgets(); }).bounds(x + ScreenWidgets.LABEL_W, y, bw, 16).build());
         y += 22;
-        addRenderableWidget(Button.builder(Component.translatable("shapewright.screen.pixel_art_blocks." + blocks.name().toLowerCase()),
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.translatable("shapewright.screen.pixel_art_blocks." + blocks.name().toLowerCase()),
                 b -> { blocks = next(Blocks.values(), blocks); rebuildWidgets(); }).bounds(x + ScreenWidgets.LABEL_W, y, bw, 16).build());
         y += 22;
         widgets.addCheckbox(x + ScreenWidgets.LABEL_W, y + 4, "", dither, () -> { dither = !dither; rebuildWidgets(); });
 
-        addRenderableWidget(Button.builder(Component.translatable("shapewright.screen.pixel_art_create"), b -> create())
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.translatable("shapewright.screen.pixel_art_create"), b -> create())
                 .tooltip(Tooltip.create(Component.translatable("shapewright.screen.pixel_art_create.description")))
                 .bounds(panelX() + panelW - 76 - 4 - 110, panelY() + panelH - 20, 110, 16).build());
-        addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.translatable("gui.cancel"), b -> onClose())
                 .bounds(panelX() + panelW - 76, panelY() + panelH - 20, 70, 16).build());
     }
 

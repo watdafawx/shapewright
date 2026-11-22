@@ -17,10 +17,12 @@ import java.util.List;
  */
 public class ServerConfigScreen extends Screen {
 
-    private static final int PANEL_W = 320;
+    private static final int PANEL_W = 316;
+    private static final int HEADER_H = 26;
     private static final int ROW_H = 24;
     private static final int SECTION_GAP = 12;
-    private static final int BOTTOM_BAR_H = 30;
+    private static final int BOTTOM_BAR_H = 32;
+    private static final int CARD_MARGIN_Y = 12;
 
     /** Tooltip keys for survival rows (in order). */
     private static final String[] SURVIVAL_TOOLTIP_KEYS = {
@@ -127,14 +129,14 @@ public class ServerConfigScreen extends Screen {
         survArrayOffsetField = addIntField(fieldX, fieldW, scratch.survivalMaxArrayOffset); y += ROW_H;
 
         // Booleans — same fieldX and fieldW as int fields
-        var btnAllowBreaking = addRenderableWidget(Button.builder(
+        var btnAllowBreaking = addRenderableWidget(ScreenWidgets.flatBuilder(
                 Component.literal(onOff(survAllowBreaking)),
                 btn -> { survAllowBreaking = !survAllowBreaking; btn.setMessage(Component.literal(onOff(survAllowBreaking))); })
                 .bounds(fieldX, 0, fieldW, 18).build());
         widgetOrder.add(btnAllowBreaking);
         y += ROW_H;
 
-        var btnOnlyPlaced = addRenderableWidget(Button.builder(
+        var btnOnlyPlaced = addRenderableWidget(ScreenWidgets.flatBuilder(
                 Component.literal(onOff(survOnlyPlacedBlocks)),
                 btn -> { survOnlyPlacedBlocks = !survOnlyPlacedBlocks; btn.setMessage(Component.literal(onOff(survOnlyPlacedBlocks))); })
                 .bounds(fieldX, 0, fieldW, 18).build());
@@ -148,14 +150,14 @@ public class ServerConfigScreen extends Screen {
         widgetOrder.add(survMaxHardnessField);
         y += ROW_H;
 
-        var btnRequireTools = addRenderableWidget(Button.builder(
+        var btnRequireTools = addRenderableWidget(ScreenWidgets.flatBuilder(
                 Component.literal(onOff(survRequireTools)),
                 btn -> { survRequireTools = !survRequireTools; btn.setMessage(Component.literal(onOff(survRequireTools))); })
                 .bounds(fieldX, 0, fieldW, 18).build());
         widgetOrder.add(btnRequireTools);
         y += ROW_H;
 
-        var btnUseDurability = addRenderableWidget(Button.builder(
+        var btnUseDurability = addRenderableWidget(ScreenWidgets.flatBuilder(
                 Component.literal(onOff(survUseDurability)),
                 btn -> { survUseDurability = !survUseDurability; btn.setMessage(Component.literal(onOff(survUseDurability))); })
                 .bounds(fieldX, 0, fieldW, 18).build());
@@ -176,14 +178,14 @@ public class ServerConfigScreen extends Screen {
 
         y += SECTION_GAP;
 
-        var btnWelcomeMessage = addRenderableWidget(Button.builder(
+        var btnWelcomeMessage = addRenderableWidget(ScreenWidgets.flatBuilder(
                         Component.literal(onOff(showWelcomeMessage)),
                         btn -> { showWelcomeMessage = !showWelcomeMessage; btn.setMessage(Component.literal(onOff(showWelcomeMessage))); })
                 .bounds(fieldX, 0, fieldW, 18).build());
         widgetOrder.add(btnWelcomeMessage);
         y += ROW_H;
 
-        var btnBuildModeHint = addRenderableWidget(Button.builder(
+        var btnBuildModeHint = addRenderableWidget(ScreenWidgets.flatBuilder(
                         Component.literal(onOff(showBuildModeHint)),
                         btn -> { showBuildModeHint = !showBuildModeHint; btn.setMessage(Component.literal(onOff(showBuildModeHint))); })
                 .bounds(fieldX, 0, fieldW, 18).build());
@@ -195,14 +197,15 @@ public class ServerConfigScreen extends Screen {
         y += SECTION_GAP;
         contentHeight = y;
 
-        // Save / Cancel — fixed at bottom, not part of scrollable content
-        int bottomY = height - BOTTOM_BAR_H + 5;
-        saveBtn = addRenderableWidget(Button.builder(Component.translatable("shapewright.button.save"), btn -> save())
-                .bounds(width / 2 - 60, bottomY, 55, 20).build());
-        cancelBtn = addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), btn -> onClose())
-                .bounds(width / 2 + 5, bottomY, 55, 20).build());
+        // Save / Cancel — fixed inside footer bar of card
+        int cardBottom = height - CARD_MARGIN_Y;
+        int bottomY = cardBottom - BOTTOM_BAR_H + 7;
+        cancelBtn = addRenderableWidget(ScreenWidgets.flatBuilder(Component.translatable("gui.cancel"), btn -> onClose())
+                .bounds(left + PANEL_W - 14 - 126, bottomY, 58, 18).build());
+        saveBtn = addRenderableWidget(ScreenWidgets.primaryButton(left + PANEL_W - 14 - 62, bottomY, 62, 18,
+                Component.translatable("shapewright.button.save"), btn -> save()));
 
-        int scrollableArea = height - 20 - BOTTOM_BAR_H; // top margin 20, bottom bar
+        int scrollableArea = (cardBottom - BOTTOM_BAR_H) - (CARD_MARGIN_Y + HEADER_H + 8);
         maxScroll = Math.max(0, contentHeight - scrollableArea);
         scrollOffset = Math.min(scrollOffset, maxScroll);
         repositionWidgets();
@@ -219,8 +222,8 @@ public class ServerConfigScreen extends Screen {
 
     private void repositionWidgets() {
         int left = (width - PANEL_W) / 2;
-        int fieldX = left + 220;
-        int top = 20 - scrollOffset;
+        int fieldX = left + PANEL_W - 14 - 80;
+        int top = CARD_MARGIN_Y + HEADER_H + 1 - 16 - scrollOffset;
         int y = top + 24;
         int i = 0;
 
@@ -290,22 +293,43 @@ public class ServerConfigScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, this.width, this.height, 150 << 24);
+        guiGraphics.fill(0, 0, this.width, this.height, Ui.BG_SCREEN);
+        int left = (width - PANEL_W) / 2;
+        int cardTop = CARD_MARGIN_Y;
+        int cardH = height - CARD_MARGIN_Y * 2;
+        ScreenWidgets.drawDarkPanel(guiGraphics, left, cardTop, PANEL_W, cardH);
+        // Header bar
+        guiGraphics.fill(left + 1, cardTop + 1, left + PANEL_W - 1, cardTop + HEADER_H, Ui.BG_CARD);
+        guiGraphics.fill(left + 1, cardTop + HEADER_H, left + PANEL_W - 1, cardTop + HEADER_H + 1, Ui.BORDER);
+        // Footer bar
+        int fy = cardTop + cardH - BOTTOM_BAR_H;
+        guiGraphics.fill(left + 1, fy, left + PANEL_W - 1, cardTop + cardH - 1, Ui.BG_CARD);
+        guiGraphics.fill(left + 1, fy, left + PANEL_W - 1, fy + 1, Ui.BORDER);
     }
 
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        // Render widgets (fields, toggles) via super
-        super.render(graphics, mouseX, mouseY, partialTick);
-
         int left = (width - PANEL_W) / 2;
-        int top = 20 - scrollOffset;
-        int labelX = left + 10;
+        int cardTop = CARD_MARGIN_Y;
+        int cardBottom = height - CARD_MARGIN_Y;
+        int scrollTop = cardTop + HEADER_H + 1;
+        int scrollBottom = cardBottom - BOTTOM_BAR_H;
 
-        // Use scissor to clip scrollable content above the bottom bar
-        graphics.enableScissor(0, 0, width, height - BOTTOM_BAR_H);
+        renderBackground(graphics, mouseX, mouseY, partialTick);
 
-        graphics.drawCenteredString(font, title, width / 2, top + 6, 0xFFFFFF);
+        // Fixed header title (never scrolls)
+        graphics.drawString(font, title, left + 14, cardTop + 9, 0xFFFFFF);
+
+        int top = scrollTop - 16 - scrollOffset;
+        int labelX = left + 14;
+
+        // Scissor strictly inside card body between header and footer (both labels & scrolled widgets)
+        graphics.enableScissor(left + 1, scrollTop, left + PANEL_W - 1, scrollBottom);
+        for (Object w : widgetOrder) {
+            if (w instanceof net.minecraft.client.gui.components.Renderable r) {
+                r.render(graphics, mouseX, mouseY, partialTick);
+            }
+        }
 
         int y = top + 24;
 
@@ -343,6 +367,10 @@ public class ServerConfigScreen extends Screen {
         drawLabel(graphics, labelX + 8, y, "shapewright.config.blocks_per_tick"); y += ROW_H;
 
         graphics.disableScissor();
+
+        // Render fixed footer buttons on top of footer bar
+        if (cancelBtn != null) cancelBtn.render(graphics, mouseX, mouseY, partialTick);
+        if (saveBtn != null) saveBtn.render(graphics, mouseX, mouseY, partialTick);
 
         // Bottom bar — drawn AFTER scissor is disabled so it's never clipped
         graphics.fill(0, height - BOTTOM_BAR_H, width, height, 0xFF000000);

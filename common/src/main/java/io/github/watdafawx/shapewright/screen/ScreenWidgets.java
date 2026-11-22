@@ -50,6 +50,91 @@ public class ScreenWidgets {
         this.widgetAdder = widgetAdder;
     }
 
+    /** Draws a dark card panel matching {@link Ui#BG_PANEL} + {@link Ui#BORDER}. */
+    public static void drawDarkPanel(GuiGraphics g, int x, int y, int w, int h) {
+        g.fill(x, y, x + w, y + h, Ui.BG_PANEL);
+        g.renderOutline(x, y, w, h, Ui.BORDER);
+    }
+
+    /** Flat dark vanilla {@link Button} matching {@link Ui#flatBtn}. */
+    public static Button flatButton(int x, int y, int w, int h, Component label, Button.OnPress onPress) {
+        return new FlatButton(x, y, w, h, label, onPress, false);
+    }
+
+    /** Primary green vanilla {@link Button} matching {@link Ui#primaryBtn}. */
+    public static Button primaryButton(int x, int y, int w, int h, Component label, Button.OnPress onPress) {
+        return new FlatButton(x, y, w, h, label, onPress, true);
+    }
+
+    /** Drop-in replacement for {@link Button#builder} that produces a flat dark button. */
+    public static FlatBuilder flatBuilder(Component label, Button.OnPress onPress) {
+        return new FlatBuilder(label, onPress, false);
+    }
+
+    public static final class FlatBuilder {
+        private final Component label;
+        private final Button.OnPress onPress;
+        private final boolean primary;
+        private int x, y, w = 150, h = 20;
+        private Tooltip tooltip;
+
+        FlatBuilder(Component label, Button.OnPress onPress, boolean primary) {
+            this.label = label;
+            this.onPress = onPress;
+            this.primary = primary;
+        }
+
+        public FlatBuilder bounds(int x, int y, int w, int h) {
+            this.x = x; this.y = y; this.w = w; this.h = h;
+            return this;
+        }
+
+        public FlatBuilder pos(int x, int y) {
+            this.x = x; this.y = y;
+            return this;
+        }
+
+        public FlatBuilder size(int w, int h) {
+            this.w = w; this.h = h;
+            return this;
+        }
+
+        public FlatBuilder tooltip(Tooltip tooltip) {
+            this.tooltip = tooltip;
+            return this;
+        }
+
+        public Button build() {
+            FlatButton b = new FlatButton(x, y, w, h, label, onPress, primary);
+            if (tooltip != null) b.setTooltip(tooltip);
+            return b;
+        }
+    }
+
+    private static final class FlatButton extends Button {
+        private final boolean primary;
+
+        FlatButton(int x, int y, int w, int h, Component label, OnPress onPress, boolean primary) {
+            super(x, y, w, h, label, onPress, DEFAULT_NARRATION);
+            this.primary = primary;
+        }
+
+        @Override
+        protected void renderWidget(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+            boolean hover = this.isHoveredOrFocused() && this.active;
+            int bg = primary ? (hover ? 0xFF26A65B : 0xFF1F8A4C) : (hover ? Ui.BG_BTN_HOVER : Ui.BG_BTN);
+            int rim = primary ? (hover ? 0xFF6EE7B7 : 0xFF34D399) : (hover ? Ui.BORDER_HOVER : Ui.BORDER);
+            if (!this.active) {
+                bg = 0xFF141821;
+                rim = 0xFF202634;
+            }
+            g.fill(getX(), getY(), getX() + getWidth(), getY() + getHeight(), bg);
+            g.renderOutline(getX(), getY(), getWidth(), getHeight(), rim);
+            int textColor = this.active ? 0xFFFFFF : 0x64748B;
+            renderString(g, net.minecraft.client.Minecraft.getInstance().font, textColor);
+        }
+    }
+
     /** Clears all tracked fields/checkboxes. Call at the start of {@code init()}. */
     public void clear() {
         intFields.clear();
@@ -71,13 +156,11 @@ public class ScreenWidgets {
         });
         field.setTooltip(Tooltip.create(Component.literal("Scroll to adjust")));
 
-        widgetAdder.accept(Button.builder(Component.literal("−"),
-                        btn -> stepInt(field, setter, -1))
-                .bounds(x + LABEL_W, y, 12, FIELD_H).build());
+        widgetAdder.accept(flatButton(x + LABEL_W, y, 12, FIELD_H, Component.literal("−"),
+                btn -> stepInt(field, setter, -1)));
         widgetAdder.accept(field);
-        widgetAdder.accept(Button.builder(Component.literal("+"),
-                        btn -> stepInt(field, setter, +1))
-                .bounds(x + LABEL_W + 12 + EDIT_W, y, 12, FIELD_H).build());
+        widgetAdder.accept(flatButton(x + LABEL_W + 12 + EDIT_W, y, 12, FIELD_H, Component.literal("+"),
+                btn -> stepInt(field, setter, +1)));
 
         intFields.add(new IntFieldEntry(field, setter));
     }
@@ -109,13 +192,11 @@ public class ScreenWidgets {
             catch (NumberFormatException ignored) {}
         });
 
-        widgetAdder.accept(Button.builder(Component.literal("−"),
-                        btn -> stepDouble(field, setter, -step))
-                .bounds(x + LABEL_W + 2, y, 12, FIELD_H).build());
+        widgetAdder.accept(flatButton(x + LABEL_W + 2, y, 12, FIELD_H, Component.literal("−"),
+                btn -> stepDouble(field, setter, -step)));
         widgetAdder.accept(field);
-        widgetAdder.accept(Button.builder(Component.literal("+"),
-                        btn -> stepDouble(field, setter, +step))
-                .bounds(x + LABEL_W + 80, y, 12, FIELD_H).build());
+        widgetAdder.accept(flatButton(x + LABEL_W + 80, y, 12, FIELD_H, Component.literal("+"),
+                btn -> stepDouble(field, setter, +step)));
 
         doubleFields.add(new DoubleFieldEntry(field, setter, step));
     }

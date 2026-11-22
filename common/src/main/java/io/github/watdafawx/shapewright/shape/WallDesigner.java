@@ -30,38 +30,78 @@ public final class WallDesigner {
         public String getNameKey() { return "shapewright.wall_designer.style." + key; }
     }
 
-    public record Config(Style style, int width, int height, boolean openWindow, boolean battlements, int seed) {
+    public record Config(Style style, int width, int height, boolean openWindow, boolean battlements,
+                         int seed, int bays, boolean doorway, int depthLayers) {
         public Config {
             width = Math.max(7, Math.min(35, width | 1));
             height = Math.max(7, Math.min(35, height));
+            bays = Math.max(1, Math.min(5, bays));
+            depthLayers = Math.max(1, Math.min(3, depthLayers));
+        }
+
+        public Config(Style style, int width, int height, boolean openWindow, boolean battlements, int seed) {
+            this(style, width, height, openWindow, battlements, seed, 1, false, 1);
         }
 
         public static Config defaults() {
-            return new Config(Style.MEDIEVAL_BAY, 13, 15, true, false, 1);
+            return new Config(Style.MEDIEVAL_BAY, 13, 15, true, false, 1, 1, false, 2);
         }
     }
 
     private WallDesigner() {}
 
-    /** Generates {@code int[height][width]} where {@code y = 0} is the top of the wall. */
+    /** Generates {@code int[height][totalWidth]} where {@code y = 0} is the top of the wall. */
     public static int[][] generate(Config cfg) {
         int w = cfg.width(), h = cfg.height();
-        int[][] grid = new int[h][w];
+        int[][] single = new int[h][w];
         Random rng = new Random(cfg.seed() * 0x9E3779B97F4A7C15L + cfg.style().ordinal() * 31L);
 
         switch (cfg.style()) {
-            case MEDIEVAL_BAY -> medievalBay(grid, cfg);
-            case GOTHIC_ARCH -> gothicArch(grid, cfg);
-            case CASTLE_WALL -> castleWall(grid, cfg);
-            case CLASSICAL -> classical(grid, cfg);
-            case TIMBER_FRAME -> timberFrame(grid, cfg);
-            case RANDOM -> randomFacade(grid, cfg, rng);
+            case MEDIEVAL_BAY -> medievalBay(single, cfg);
+            case GOTHIC_ARCH -> gothicArch(single, cfg);
+            case CASTLE_WALL -> castleWall(single, cfg);
+            case CLASSICAL -> classical(single, cfg);
+            case TIMBER_FRAME -> timberFrame(single, cfg);
+            case RANDOM -> randomFacade(single, cfg, rng);
+        }
+
+        if (cfg.doorway()) {
+            carveDoorway(single, w / 2, h);
         }
 
         if (cfg.battlements()) {
-            applyBattlements(grid);
+            applyBattlements(single);
         }
-        return grid;
+
+        if (cfg.bays() <= 1) return single;
+
+        // Tile bays seamlessly sharing the edge pilaster column
+        int step = Math.max(1, w - 1);
+        int totalW = step * cfg.bays() + 1;
+        int[][] multi = new int[h][totalW];
+        for (int b = 0; b < cfg.bays(); b++) {
+            int ox = b * step;
+            for (int y = 0; y < h; y++) {
+                System.arraycopy(single[y], 0, multi[y], ox, w);
+            }
+        }
+        return multi;
+    }
+
+    /** Returns Z depth offset for a wall cell when {@code depthLayers > 1}: +1 protrudes, -1 recesses. */
+    public static int reliefFor(int cellVal, int depthLayers) {
+        if (depthLayers <= 1) return 0;
+        if (cellVal == PRIMARY) return 1;
+        if (cellVal == TRIM) return depthLayers >= 3 ? 1 : 0;
+        if (cellVal == ACCENT) return -1;
+        return 0;
+    }
+
+    private static void carveDoorway(int[][] g, int cx, int h) {
+        int w = g[0].length;
+        int halfW = Math.max(1, Math.min(2, (w - 4) / 4));
+        int doorTop = Math.max(3, h - Math.max(4, h / 3));
+        carveArchWindow(g, cx, doorTop, h - 1, halfW, false, true);
     }
 
     private static void fill(int[][] g, int v) {

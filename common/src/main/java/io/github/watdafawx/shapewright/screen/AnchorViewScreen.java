@@ -88,29 +88,29 @@ public class AnchorViewScreen extends BaseOwoScreen<FlowLayout> {
         String[][] moves = {{"X-", "-1,0,0"}, {"X+", "1,0,0"}, {"Y-", "0,-1,0"}, {"Y+", "0,1,0"}, {"Z-", "0,0,-1"}, {"Z+", "0,0,1"}};
         for (String[] m : moves) {
             String[] d = m[1].split(",");
-            bottom.child(w(Components.button(Component.literal(m[0]), b -> {
+            bottom.child(w(Ui.flatBtn(Component.literal(m[0]), b -> {
                         int step = Screen.hasShiftDown() ? 5 : 1;
                         BuildPipelineClient.nudgeAnchor(Integer.parseInt(d[0]) * step, Integer.parseInt(d[1]) * step,
                                 Integer.parseInt(d[2]) * step);
                     })).horizontalSizing(Sizing.fixed(28))
                     .tooltip(Component.translatable("shapewright.screen.anchor_move.description")));
         }
-        terrainButton = Components.button(Component.empty(), b -> {
+        terrainButton = Ui.flatBtn(Component.empty(), b -> {
             showTerrain = !showTerrain;
             updateTerrainButton();
         });
         updateTerrainButton();
         bottom.child(w(terrainButton).horizontalSizing(Sizing.fixed(96)).margins(Insets.left(8)));
         bottom.child(hspace());
-        bottom.child(w(Components.button(Component.translatable("shapewright.screen.use_shape"), b -> {
+        bottom.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.use_shape"), b -> {
             BuildPipelineClient.buildAnchor();
             onClose();
         })).horizontalSizing(Sizing.fixed(80)));
-        bottom.child(w(Components.button(Component.translatable("shapewright.screen.anchor_release"), b -> {
+        bottom.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.anchor_release"), b -> {
             BuildPipelineClient.clearAnchor();
             onClose();
         })).horizontalSizing(Sizing.fixed(80)));
-        bottom.child(w(Components.button(Component.translatable("gui.done"), b -> onClose())).horizontalSizing(Sizing.fixed(70)));
+        bottom.child(w(Ui.flatBtn(Component.translatable("gui.done"), b -> onClose())).horizontalSizing(Sizing.fixed(70)));
         root.child(bottom);
     }
 

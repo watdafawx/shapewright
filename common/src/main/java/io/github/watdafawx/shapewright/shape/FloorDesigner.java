@@ -27,7 +27,10 @@ public final class FloorDesigner {
         MEDALLION("medallion"),
         LABYRINTH("labyrinth"),
         ROSE_WINDOW("rose_window"),
-        GRADIENT("gradient");
+        GRADIENT("gradient"),
+        HERRINGBONE("herringbone"),
+        PARQUET("parquet"),
+        RUG_RUNNER("rug_runner");
 
         public final String key;
         Style(String key) { this.key = key; }
@@ -47,25 +50,36 @@ public final class FloorDesigner {
         public String getNameKey() { return "shapewright.floor_designer.outline." + key; }
     }
 
-    public record Config(Style style, Outline outline, int size, int symmetry, int complexity, int seed, boolean border) {
+    public record Config(Style style, Outline outline, int width, int depth, int symmetry, int complexity, int seed, boolean border) {
         public Config {
-            size = Math.max(11, Math.min(81, size | 1));
+            width = Math.max(11, Math.min(81, width | 1));
+            depth = Math.max(11, Math.min(81, depth | 1));
             symmetry = Math.max(4, Math.min(12, symmetry));
             complexity = Math.max(1, Math.min(5, complexity));
         }
 
+        public Config(Style style, Outline outline, int size, int symmetry, int complexity, int seed, boolean border) {
+            this(style, outline, size, size, symmetry, complexity, seed, border);
+        }
+
+        public int size() {
+            return width;
+        }
+
         public static Config defaults() {
-            return new Config(Style.MANDALA, Outline.QUATREFOIL, 33, 8, 3, 1, true);
+            return new Config(Style.MANDALA, Outline.QUATREFOIL, 33, 33, 8, 3, 1, true);
         }
     }
 
     private FloorDesigner() {}
 
-    /** Generates the full {@code size x size} palette-index grid. */
+    /** Generates the full {@code depth x width} palette-index grid. */
     public static int[][] generate(Config cfg) {
-        int n = cfg.size();
-        int half = n / 2;
-        int[][] grid = new int[n][n];
+        int w = cfg.width();
+        int d = cfg.depth();
+        int halfW = w / 2;
+        int halfD = d / 2;
+        int[][] grid = new int[d][w];
         Random rng = new Random(cfg.seed() * 0x9E3779B97F4A7C15L + cfg.style().ordinal() * 31L + cfg.complexity());
 
         // Seed-driven shape parameters so Randomize produces genuinely distinct designs
@@ -82,10 +96,10 @@ public final class FloorDesigner {
             return grid;
         }
 
-        for (int z = 0; z < n; z++) {
-            for (int x = 0; x < n; x++) {
-                double dx = (x - half) / (half + 0.5);
-                double dz = (z - half) / (half + 0.5);
+        for (int z = 0; z < d; z++) {
+            for (int x = 0; x < w; x++) {
+                double dx = (x - halfW) / (halfW + 0.5);
+                double dz = (z - halfD) / (halfD + 0.5);
                 if (!inOutline(cfg.outline(), dx, dz, cfg.symmetry())) {
                     grid[z][x] = EMPTY;
                     continue;
@@ -93,15 +107,18 @@ public final class FloorDesigner {
                 grid[z][x] = switch (cfg.style()) {
                     case MANDALA -> mandala(dx, dz, cfg, freq1, freq2, phase, ringPos, petalSharp);
                     case PROCEDURAL -> BASE;
-                    case FLORAL -> floral(dx, dz, x - half, z - half, half, cfg, freq1, phase, subVariant);
+                    case FLORAL -> floral(dx, dz, x - halfW, z - halfD, Math.min(halfW, halfD), cfg, freq1, phase, subVariant);
                     case SUNBURST -> sunburst(dx, dz, cfg, petalSharp, phase);
                     case CRESCENT -> crescent(dx, dz, cfg, subVariant);
                     case COMPASS -> compass(dx, dz, cfg);
                     case ORNATE_TILE -> ornateTile(x, z, cfg, subVariant);
                     case MEDALLION -> medallion(dx, dz, x, z, cfg);
-                    case LABYRINTH -> labyrinth(dx, dz, x - half, z - half, half, cfg);
+                    case LABYRINTH -> labyrinth(dx, dz, x - halfW, z - halfD, Math.min(halfW, halfD), cfg);
                     case ROSE_WINDOW -> roseWindow(dx, dz, cfg, freq1);
                     case GRADIENT -> gradient(dx, dz, x, z, cfg, subVariant);
+                    case HERRINGBONE -> herringbone(x, z, cfg);
+                    case PARQUET -> parquet(x, z, cfg);
+                    case RUG_RUNNER -> rugRunner(dx, dz, x, z, w, d, cfg);
                 };
             }
         }
@@ -393,14 +410,57 @@ public final class FloorDesigner {
         return TRIM;
     }
 
+    /** 10. Herringbone: classic angled interlocking plank chevron pattern. */
+    private static int herringbone(int x, int z, Config cfg) {
+        int len = 2 + cfg.complexity(); // 3..7
+        int u = Math.floorMod(x + z, len * 2);
+        int v = Math.floorMod(x - z, len * 2);
+        boolean horiz = u < len;
+        if (horiz) {
+            return (v % 2 == 0) ? PRIMARY : BASE;
+        }
+        return (u % 2 == 0) ? SECONDARY : BASE;
+    }
+
+    /** 11. Parquet: alternating horizontal & vertical basketweave wood/stone squares. */
+    private static int parquet(int x, int z, Config cfg) {
+        int tile = 3 + cfg.complexity(); // 4..8
+        int tx = Math.floorDiv(x, tile), tz = Math.floorDiv(z, tile);
+        int lx = Math.floorMod(x, tile), lz = Math.floorMod(z, tile);
+        if (lx == 0 && lz == 0) return ACCENT;
+        if (lx == 0 || lz == 0) return TRIM;
+        boolean flip = ((tx + tz) & 1) == 0;
+        int stripe = flip ? lx : lz;
+        return (stripe & 1) == 0 ? PRIMARY : SECONDARY;
+    }
+
+    /** 12. Rug / Runner: framed palace carpet with inner border, corner motifs & center medallion. */
+    private static int rugRunner(double dx, double dz, int x, int z, int w, int d, Config cfg) {
+        int edge = Math.min(Math.min(x, w - 1 - x), Math.min(z, d - 1 - z));
+        if (edge == 0) return BASE;
+        if (edge == 1) return TRIM;
+        if (edge == 2) return ((x + z) & 1) == 0 ? ACCENT : SECONDARY;
+        if (edge == 3) return TRIM;
+        double r = Math.hypot(dx, dz);
+        if (r < 0.10) return ACCENT;
+        if (r < 0.24) return TRIM;
+        if (r < 0.42) {
+            double wa = foldAngle(dx, dz, cfg.symmetry());
+            return wa < (Math.PI / (cfg.symmetry() * 2.0)) ? SECONDARY : PRIMARY;
+        }
+        return PRIMARY;
+    }
+
     /**
      * Procedural architectural floor composer: stacks seed-driven symmetric geometric layers
      * (field, outer band, petals/stars/arches/filigree/jewels, centerpiece) with automatic
      * trim outlining so every seed produces a crisp, unique, intentional mosaic.
      */
     private static void generateProcedural(int[][] grid, Config cfg, Random rng) {
-        int n = grid.length;
-        int half = n / 2;
+        int d = grid.length;
+        int w = grid[0].length;
+        int halfW = w / 2;
+        int halfD = d / 2;
         int sym = cfg.symmetry();
 
         // 1. Background field (0 = solid, 1 = subtle checker, 2 = diagonal checker, 3 = radial rays)
@@ -445,10 +505,10 @@ public final class FloorDesigner {
         int centerStyle = rng.nextInt(3);
         boolean autoOutline = rng.nextInt(3) != 0; // 2/3 chance of crisp trim outlines between primary & base
 
-        for (int z = 0; z < n; z++) {
-            for (int x = 0; x < n; x++) {
-                double dx = (x - half) / (half + 0.5);
-                double dz = (z - half) / (half + 0.5);
+        for (int z = 0; z < d; z++) {
+            for (int x = 0; x < w; x++) {
+                double dx = (x - halfW) / (halfW + 0.5);
+                double dz = (z - halfD) / (halfD + 0.5);
                 if (!inOutline(cfg.outline(), dx, dz, sym)) {
                     grid[z][x] = EMPTY;
                     continue;
@@ -546,9 +606,9 @@ public final class FloorDesigner {
 
         // Auto-outline pass: crisp 1-block trim where PRIMARY meets BASE
         if (autoOutline) {
-            boolean[][] outlineCells = new boolean[n][n];
-            for (int z = 1; z < n - 1; z++) {
-                for (int x = 1; x < n - 1; x++) {
+            boolean[][] outlineCells = new boolean[d][w];
+            for (int z = 1; z < d - 1; z++) {
+                for (int x = 1; x < w - 1; x++) {
                     if (grid[z][x] != BASE) continue;
                     if (grid[z - 1][x] == PRIMARY || grid[z + 1][x] == PRIMARY
                             || grid[z][x - 1] == PRIMARY || grid[z][x + 1] == PRIMARY) {
@@ -556,28 +616,29 @@ public final class FloorDesigner {
                     }
                 }
             }
-            for (int z = 1; z < n - 1; z++)
-                for (int x = 1; x < n - 1; x++)
+            for (int z = 1; z < d - 1; z++)
+                for (int x = 1; x < w - 1; x++)
                     if (outlineCells[z][x]) grid[z][x] = TRIM;
         }
     }
 
     /** Draws a crisp 1-block trim outline on any filled cell adjacent to an empty cell or grid edge. */
     private static void applyBorder(int[][] grid) {
-        int n = grid.length;
-        boolean[][] edge = new boolean[n][n];
-        for (int z = 0; z < n; z++) {
-            for (int x = 0; x < n; x++) {
+        int d = grid.length;
+        int w = grid[0].length;
+        boolean[][] edge = new boolean[d][w];
+        for (int z = 0; z < d; z++) {
+            for (int x = 0; x < w; x++) {
                 if (grid[z][x] == EMPTY) continue;
-                if (x == 0 || z == 0 || x == n - 1 || z == n - 1
+                if (x == 0 || z == 0 || x == w - 1 || z == d - 1
                         || grid[z - 1][x] == EMPTY || grid[z + 1][x] == EMPTY
                         || grid[z][x - 1] == EMPTY || grid[z][x + 1] == EMPTY) {
                     edge[z][x] = true;
                 }
             }
         }
-        for (int z = 0; z < n; z++) {
-            for (int x = 0; x < n; x++) {
+        for (int z = 0; z < d; z++) {
+            for (int x = 0; x < w; x++) {
                 if (edge[z][x]) grid[z][x] = TRIM;
             }
         }

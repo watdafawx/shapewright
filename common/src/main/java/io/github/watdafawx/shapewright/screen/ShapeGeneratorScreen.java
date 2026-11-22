@@ -368,14 +368,14 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
         String[][] moves = {{"X-", "-1,0,0"}, {"X+", "1,0,0"}, {"Y-", "0,-1,0"}, {"Y+", "0,1,0"}, {"Z-", "0,0,-1"}, {"Z+", "0,0,1"}};
         for (String[] m : moves) {
             String[] d = m[1].split(",");
-            nudgeRow.child(w(Components.button(Component.literal(m[0]), b -> {
+            nudgeRow.child(w(Ui.flatBtn(Component.literal(m[0]), b -> {
                 int step = Screen.hasShiftDown() ? 5 : 1;
                 BuildPipelineClient.nudgeAnchor(Integer.parseInt(d[0]) * step, Integer.parseInt(d[1]) * step, Integer.parseInt(d[2]) * step);
             })).sizing(Sizing.fixed(22), Sizing.fixed(CONTROL_H))
                     .tooltip(Component.translatable("shapewright.screen.anchor_move.description")));
         }
         nudgeRow.child(Ui.hspace());
-        nudgeRow.child(w(Components.button(Component.literal("↻"), b -> {
+        nudgeRow.child(w(Ui.flatBtn(Component.literal("↻"), b -> {
             BuildPipelineClient.rotateAnchor(1);
             ShapeParams updated = BuildPipelineClient.getAnchorShape();
             if (updated != null) {
@@ -418,7 +418,7 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
         ButtonComponent palette = textButton("shapewright.screen.palette_button", "shapewright.screen.palette_button.description",
                 () -> { if (minecraft != null) minecraft.setScreen(new PaletteScreen(this)); });
         ButtonComponent build = textButton("shapewright.screen.use_shape", "shapewright.screen.use_shape.description", this::useShape);
-        ButtonComponent done = Components.button(Component.translatable("gui.done"), b -> onClose());
+        ButtonComponent done = Ui.flatBtn(Component.translatable("gui.done"), b -> onClose());
         int buildW = Math.max(80, buttonW("shapewright.screen.use_shape") + 12), doneW = Math.max(60, buttonW("gui.done") + 12);
         for (ButtonComponent b : List.of(save, palette, build, done)) w(b).verticalSizing(Sizing.fixed(20));
         w(build).horizontalSizing(Sizing.fixed(buildW));
@@ -464,11 +464,11 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
 
         FlowLayout layers = Containers.horizontalFlow(Sizing.content(), Sizing.content());
         layers.gap(2).verticalAlignment(VerticalAlignment.CENTER);
-        layers.child(w(Components.button(Component.literal("◀"), b -> preview.stepLayer(params, -1))).sizing(Sizing.fixed(14), Sizing.fixed(CONTROL_H)));
+        layers.child(w(Ui.flatBtn(Component.literal("◀"), b -> preview.stepLayer(params, -1))).sizing(Sizing.fixed(14), Sizing.fixed(CONTROL_H)));
         layerLabel = Ui.label(Component.empty(), TEXT);
         layerLabel.margins(Insets.horizontal(3));
         layers.child(layerLabel);
-        layers.child(w(Components.button(Component.literal("▶"), b -> preview.stepLayer(params, 1))).sizing(Sizing.fixed(14), Sizing.fixed(CONTROL_H)));
+        layers.child(w(Ui.flatBtn(Component.literal("▶"), b -> preview.stepLayer(params, 1))).sizing(Sizing.fixed(14), Sizing.fixed(CONTROL_H)));
         tools.child(layers);
 
         FlowLayout actions = Containers.horizontalFlow(Sizing.content(), Sizing.content());
@@ -477,7 +477,7 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
                 () -> { if (minecraft != null) minecraft.setScreen(new MaterialsScreen(this, preview.requiredItems(params))); });
         actions.child(w(materials).verticalSizing(Sizing.fixed(CONTROL_H)));
         String exportText = I18n.get("shapewright.screen.export") + "  ▼";
-        ButtonComponent export = Components.button(Component.literal(exportText), b -> Ui.openMenu(this, root, b, "",
+        ButtonComponent export = Ui.flatBtn(Component.literal(exportText), b -> Ui.openMenu(this, root, b, "",
                 GhostCompat.isAvailable() ? List.of(".schem", ".nbt", GHOST) : List.of(".schem", ".nbt"),
                 ext -> I18n.get(ext.equals(".schem") ? "shapewright.screen.export_schem"
                         : ext.equals(GHOST) ? "shapewright.screen.export_ghost" : "shapewright.screen.export_nbt"), this::export, () -> {}));
@@ -835,7 +835,7 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
                 .tooltip(wrapped(I18n.get("shapewright.screen.editing.description"))));
         heading.child(Ui.hspace());
         String addText = I18n.get("shapewright.screen.add_part_button");
-        ButtonComponent add = Components.button(Component.literal(addText),
+        ButtonComponent add = Ui.flatBtn(Component.literal(addText),
                 b -> Ui.openMenu(this, root, b, "", List.of(ShapeType.values()), t -> I18n.get(t.getNameKey()), this::addPart, () -> {}));
         add.active(params.parts().size() < ShapeParams.MAX_PARTS);
         heading.child(w(add).sizing(Sizing.fixed(font.width(addText) + 12), Sizing.fixed(CONTROL_H))
@@ -1005,7 +1005,7 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
                 list.add(new Row(Section.DESIGN, I18n.get("shapewright.wall_designer.row"), "shapewright.wall_designer.row.description",
                         () -> fixedButton(I18n.get("shapewright.wall_designer.open"), fieldW, () -> {
                             if (minecraft != null) {
-                                minecraft.setScreen(new WallDesignerScreen(this, name -> {
+                                minecraft.setScreen(new FloorDesignerScreen(this, FloorDesignerScreen.Tab.WALL, name -> {
                                     params = ShapeParams.defaults(ShapeType.SCHEMATIC).withSchematic(name);
                                     templateName = null;
                                     setName(name);
@@ -1130,7 +1130,7 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
     private <T> io.wispforest.owo.ui.core.Component choice(String shown, T[] options, Function<T, String> name, Consumer<T> pick) {
         String arrow = "  ▼";
         String text = fit(shown, fieldW - 8 - font.width(arrow));
-        ButtonComponent button = Components.button(Component.literal(text + arrow),
+        ButtonComponent button = Ui.flatBtn(Component.literal(text + arrow),
                 b -> Ui.openMenu(this, root, b, shown, List.of(options), name, pick, this::refresh));
         if (!text.equals(shown)) w(button).tooltip(Component.literal(shown));
         return w(button).sizing(Sizing.fixed(fieldW), Sizing.fixed(CONTROL_H));
@@ -1138,7 +1138,7 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
 
     /** An on/off button: green when on. */
     private io.wispforest.owo.ui.core.Component toggle(boolean on, String text, Runnable flip) {
-        ButtonComponent button = Components.button(Component.literal(fit(text, fieldW - 8)).withColor(on ? 0x8FD18F : TEXT), b -> {
+        ButtonComponent button = Ui.flatBtn(Component.literal(fit(text, fieldW - 8)).withColor(on ? 0x8FD18F : TEXT), b -> {
             flip.run();
             refresh();
         });
@@ -1177,9 +1177,9 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
             } catch (NumberFormatException ignored) {
             }
         });
-        flow.child(w(Components.button(Component.literal("−"), b -> stepBox(box, -step, integer))).sizing(Sizing.fixed(14), Sizing.fixed(CONTROL_H)));
+        flow.child(w(Ui.flatBtn(Component.literal("−"), b -> stepBox(box, -step, integer))).sizing(Sizing.fixed(14), Sizing.fixed(CONTROL_H)));
         flow.child(w(box));
-        flow.child(w(Components.button(Component.literal("+"), b -> stepBox(box, step, integer))).sizing(Sizing.fixed(14), Sizing.fixed(CONTROL_H)));
+        flow.child(w(Ui.flatBtn(Component.literal("+"), b -> stepBox(box, step, integer))).sizing(Sizing.fixed(14), Sizing.fixed(CONTROL_H)));
         // The wheel over the field changes the number (Alt: 5 steps); over labels it scrolls the settings
         w(box).mouseScroll().subscribe((x, y, amount) -> {
             stepBox(box, (amount > 0 ? step : -step) * (Screen.hasAltDown() ? 5 : 1), integer);
@@ -1207,7 +1207,7 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
 
     /** A button sized to its translated text, with an optional wrapped tooltip. */
     private ButtonComponent textButton(String key, @Nullable String tooltipKey, Runnable action) {
-        ButtonComponent b = Components.button(Component.literal(I18n.get(key)), btn -> action.run());
+        ButtonComponent b = Ui.flatBtn(Component.literal(I18n.get(key)), btn -> action.run());
         w(b).sizing(Sizing.fixed(buttonW(key)), Sizing.fixed(CONTROL_H));
         if (tooltipKey != null) w(b).tooltip(wrapped(I18n.get(tooltipKey)));
         return b;
@@ -1221,7 +1221,7 @@ public class ShapeGeneratorScreen extends BaseOwoScreen<FlowLayout> {
     /** A button of a fixed width whose text is shortened to fit (the full text then shows on hover). */
     private io.wispforest.owo.ui.core.Component fixedButton(String text, int width, Runnable action) {
         String shown = fit(text, width - 8);
-        ButtonComponent b = Components.button(Component.literal(shown), btn -> action.run());
+        ButtonComponent b = Ui.flatBtn(Component.literal(shown), btn -> action.run());
         if (!shown.equals(text)) w(b).tooltip(Component.literal(text));
         return w(b).sizing(Sizing.fixed(width), Sizing.fixed(CONTROL_H));
     }

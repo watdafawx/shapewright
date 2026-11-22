@@ -81,7 +81,7 @@ public class UndoHistoryScreen extends BaseOwoScreen<FlowLayout> {
 
         FlowLayout bottom = Containers.horizontalFlow(Sizing.fill(100), Sizing.content());
         bottom.child(hspace());
-        bottom.child(w(Components.button(Component.translatable("gui.done"), b -> onClose())).horizontalSizing(Sizing.fixed(70)));
+        bottom.child(w(Ui.flatBtn(Component.translatable("gui.done"), b -> onClose())).horizontalSizing(Sizing.fixed(70)));
         box.child(bottom);
         root.child(box);
 

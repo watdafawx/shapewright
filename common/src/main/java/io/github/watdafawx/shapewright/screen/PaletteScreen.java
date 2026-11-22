@@ -118,9 +118,9 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         top.gap(6).verticalAlignment(VerticalAlignment.CENTER).margins(Insets.bottom(6));
         top.child(label(title.copy().withStyle(s -> s.withBold(true)), 0xFFFFFF));
         top.child(hspace());
-        top.child(w(Components.button(Component.translatable("shapewright.screen.copy_code"), b -> copyCode()))
+        top.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.copy_code"), b -> copyCode()))
                 .tooltip(Component.translatable("shapewright.screen.copy_palette_code.description")));
-        top.child(w(Components.button(Component.translatable("shapewright.screen.paste_code"), b -> pasteCode()))
+        top.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.paste_code"), b -> pasteCode()))
                 .tooltip(Component.translatable("shapewright.screen.paste_code.description")));
         root.child(top);
 
@@ -135,7 +135,7 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout bottom = Containers.horizontalFlow(Sizing.fill(100), Sizing.content());
         bottom.verticalAlignment(VerticalAlignment.CENTER).margins(Insets.top(6));
         bottom.child(hspace());
-        bottom.child(w(Components.button(Component.translatable("gui.done"), b -> onClose())).horizontalSizing(Sizing.fixed(70)));
+        bottom.child(w(Ui.flatBtn(Component.translatable("gui.done"), b -> onClose())).horizontalSizing(Sizing.fixed(70)));
         root.child(bottom);
 
         refresh();
@@ -156,14 +156,14 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
             if (tab != Tab.ALL) { tab = Tab.ALL; refresh(); }
         });
         searchRow.child(w(search));
-        ButtonComponent copies = Components.button(Component.empty(), b -> {});
+        ButtonComponent copies = Ui.flatBtn(Component.empty(), b -> {});
         copies.onPress(b -> {
             grid.toggleHideCopies();
             b.setMessage(hideCopiesText());
         });
         copies.setMessage(hideCopiesText());
         searchRow.child(w(copies));
-        searchRow.child(w(Components.button(Component.translatable("shapewright.screen.palette_rescan"), b -> BlockColorCache.scan()))
+        searchRow.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.palette_rescan"), b -> BlockColorCache.scan()))
                 .tooltip(Component.translatable("shapewright.screen.palette_rescan.description")));
         status = label(Component.empty(), 0xAAAAAA);
         searchRow.child(status);
@@ -173,7 +173,7 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         FlowLayout modes = Containers.ltrTextFlow(Sizing.fill(100), Sizing.content());
         modes.gap(3);
         for (Mode mode : Mode.values()) {
-            modes.child(w(Components.button(Component.translatable(mode.getNameKey()), b -> {
+            modes.child(w(Ui.flatBtn(Component.translatable(mode.getNameKey()), b -> {
                 rerollSeed = 0;
                 suggest(mode);
             })).tooltip(Component.translatable(mode.getNameKey() + ".description")));
@@ -211,7 +211,7 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
 
     private void fillLeft() {
         left.clearChildren();
-        left.child(settingRow("shapewright.screen.palette_enabled", w(Components.button(
+        left.child(settingRow("shapewright.screen.palette_enabled", w(Ui.flatBtn(
                 Component.translatable(enabled ? "options.on" : "options.off"), b -> { enabled = !enabled; apply(); refresh(); }))
                 .sizing(Sizing.fixed(110), Sizing.fixed(16))));
         left.child(settingRow("shapewright.screen.palette_source", w(choice(this, root, I18n.get(palette.source().getNameKey()),
@@ -228,8 +228,8 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
             }
             FlowLayout buttons = Containers.horizontalFlow(Sizing.content(), Sizing.content());
             buttons.gap(4);
-            buttons.child(w(Components.button(Component.translatable("shapewright.screen.palette_add_held"), b -> addHeld())));
-            buttons.child(w(Components.button(Component.translatable("shapewright.screen.palette_clear"), b -> {
+            buttons.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.palette_add_held"), b -> addHeld())));
+            buttons.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.palette_clear"), b -> {
                 palette = palette.withCustom(List.of());
                 apply();
                 refresh();
@@ -242,12 +242,12 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
                 p -> { palette = palette.withPattern(p); apply(); }, this::refresh))
                 .sizing(Sizing.fixed(110), Sizing.fixed(16)).tooltip(Component.translatable("shapewright.screen.palette_pattern.description"))));
         left.child(settingRow("shapewright.screen.palette_band", bandField()));
-        left.child(w(Components.button(Component.translatable("shapewright.screen.palette_save_favorite"), b -> saveFavorite()))
+        left.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.palette_save_favorite"), b -> saveFavorite()))
                 .horizontalSizing(Sizing.fill(100))
                 .tooltip(Component.translatable("shapewright.screen.palette_save_favorite.description")));
 
         left.child(label(Component.translatable("shapewright.screen.palette_preview"), 0xAAAAAA).maxWidth(LEFT_W - 12).margins(Insets.top(4)));
-        left.child(w(Components.button(Component.translatable(showShape
+        left.child(w(Ui.flatBtn(Component.translatable(showShape
                         ? "shapewright.screen.palette_scene_shape" : "shapewright.screen.palette_scene_room"),
                 b -> { showShape = !showShape; fillLeft(); }))
                 .horizontalSizing(Sizing.fill(100))
@@ -279,9 +279,9 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
             }
         });
         IntConsumer step = d -> box.text(String.valueOf(Math.max(1, palette.band() + d)));
-        flow.child(w(Components.button(Component.literal("−"), b -> step.accept(-1))).sizing(Sizing.fixed(14), Sizing.fixed(16)));
+        flow.child(w(Ui.flatBtn(Component.literal("−"), b -> step.accept(-1))).sizing(Sizing.fixed(14), Sizing.fixed(16)));
         flow.child(w(box));
-        flow.child(w(Components.button(Component.literal("+"), b -> step.accept(1))).sizing(Sizing.fixed(14), Sizing.fixed(16)));
+        flow.child(w(Ui.flatBtn(Component.literal("+"), b -> step.accept(1))).sizing(Sizing.fixed(14), Sizing.fixed(16)));
         w(box).mouseScroll().subscribe((x, y, amount) -> { step.accept(amount > 0 ? 1 : -1); return true; });
         return flow;
     }
@@ -292,13 +292,13 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
 
     private void fillSuggestion() {
         suggestionRow.clearChildren();
-        suggestionRow.child(w(Components.button(Component.literal("−"), b -> { suggestCount = Math.max(2, suggestCount - 1); fillSuggestion(); }))
+        suggestionRow.child(w(Ui.flatBtn(Component.literal("−"), b -> { suggestCount = Math.max(2, suggestCount - 1); fillSuggestion(); }))
                 .sizing(Sizing.fixed(14), Sizing.fixed(16)));
         suggestionRow.child(label(Component.literal(String.valueOf(suggestCount)), 0xFFFFFF));
-        suggestionRow.child(w(Components.button(Component.literal("+"), b -> { suggestCount = Math.min(SUGGEST_COUNT_MAX, suggestCount + 1); fillSuggestion(); }))
+        suggestionRow.child(w(Ui.flatBtn(Component.literal("+"), b -> { suggestCount = Math.min(SUGGEST_COUNT_MAX, suggestCount + 1); fillSuggestion(); }))
                 .sizing(Sizing.fixed(14), Sizing.fixed(16)));
         suggestionRow.child(label(Component.translatable("shapewright.screen.suggest.blocks"), 0xAAAAAA));
-        ButtonComponent reroll = Components.button(Component.translatable("shapewright.screen.palette_reroll"), b -> {
+        ButtonComponent reroll = Ui.flatBtn(Component.translatable("shapewright.screen.palette_reroll"), b -> {
             rerollSeed = (rerollSeed * 31 + System.nanoTime()) | 1;
             if (lastMode != null) suggest(lastMode);
         });
@@ -309,7 +309,7 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         } else {
             // Clicking a suggested block adds just that one
             suggestionRow.child(new SwatchesComponent(suggestion, i -> addCustom(suggestion.get(i))));
-            suggestionRow.child(w(Components.button(Component.translatable("shapewright.screen.palette_use_suggestion"), b -> {
+            suggestionRow.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.palette_use_suggestion"), b -> {
                 palette = palette.withSource(BlockPalette.Source.CUSTOM).withCustom(suggestion);
                 enabled = true;
                 apply();
@@ -324,12 +324,12 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
             String text = I18n.get("shapewright.screen.palette_tab." + t.name().toLowerCase());
             if (t == Tab.FAVORITES) text += " (" + PaletteClientState.getFavorites().size() + ")";
             if (t == Tab.PRESETS) text += " (" + PalettePresets.get().size() + ")";
-            ButtonComponent b = Components.button(Component.literal(text), btn -> { tab = t; refresh(); });
+            ButtonComponent b = Ui.flatBtn(Component.literal(text), btn -> { tab = t; refresh(); });
             b.active(tab != t);
             tabs.child(w(b));
         }
         if (tab == Tab.PRESETS) {
-            tabs.child(w(Components.button(Component.translatable("shapewright.screen.palette_reload_presets"), b -> {
+            tabs.child(w(Ui.flatBtn(Component.translatable("shapewright.screen.palette_reload_presets"), b -> {
                 PalettePresets.reload();
                 refresh();
             })).margins(Insets.left(8)).tooltip(Component.translatable("shapewright.screen.palette_reload_presets.description")));
@@ -390,7 +390,7 @@ public class PaletteScreen extends BaseOwoScreen<FlowLayout> {
         row.child(new SwatchesComponent(blocks, null));
         if (delete != null) {
             row.child(hspace());
-            row.child(w(Components.button(Component.literal("×"), b -> delete.run())).sizing(Sizing.fixed(14), Sizing.fixed(14))
+            row.child(w(Ui.flatBtn(Component.literal("×"), b -> delete.run())).sizing(Sizing.fixed(14), Sizing.fixed(14))
                     .tooltip(Component.translatable("shapewright.screen.palette_delete_favorite")));
         }
         return row;

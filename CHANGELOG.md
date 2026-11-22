@@ -1,3 +1,12 @@
+## 5.7.0
+
+New:
+- **Unified Surface Designer (Floor / Wall / Ceiling)**: merged Floor & Wall designers into one screen with a new **Ceiling** tab (`Coffered`, `Ribbed Vault`, `Recessed Dome`, `Chandelier`, `Timber Beams`, `Skylight`) and 1–3 layer 3D relief depth.
+- **Expanded Floor & Wall generators**: rectangular `W × D` floors, 3 new floor styles (`Herringbone`, `Parquet`, `Rug / Runner`), optional 2-layer floor relief, tiled wall `Bays` (1–5), `Doorway` toggle, and 3D protruding/recessed wall depth.
+- **Smart Palette Generator**: **Random Palette** and **Match Locked** (HSL color-harmony generator using scanned block colors; lock any slots like Base & Primary via right-click or the lock button to harmonize the rest), plus 4 new built-in themes and an in-UI **Save Theme** button.
+- **Canvas tools**: Brush, Fill bucket, Eraser, Eyedropper (`Pick`), Grid toggle, Mirror toggle, Undo/Redo (`Ctrl+Z`/`Ctrl+Y`), `1–5` brush hotkeys, and 3D relief shading.
+- **Modern flat dark UI overhaul**: unified flat dark panels, cards, buttons, pill switches, visual preset thumbnails, and flat green sliders across Surface Designer, Shape Generator, Block Palette, Modifiers, and Client/Server Settings.
+
 ## 5.5.0
 
 New:

@@ -21,11 +21,14 @@ import java.util.List;
 public class ModifiersScreen extends Screen {
 
     // ---- layout ----
-    private static final int PANEL_W = 390;
-    private static final int PANEL_H = 246;
-    private static final int LIST_W  = 175;
-    private static final int DIV_OX  = LIST_W + 8;
-    private static final int SET_OX  = DIV_OX + 6;
+    private static final int PANEL_W = 408;
+    private static final int PANEL_H = 214;
+    private static final int HEADER_H = 24;
+    private static final int FOOTER_H = 28;
+    private static final int PAD = 10;
+    private static final int LIST_W  = 176;
+    private static final int DIV_OX  = PAD + LIST_W + 10;
+    private static final int SET_OX  = DIV_OX + 10;
     private static final int ROW_H   = 22;
 
     // ---- state ----
@@ -58,13 +61,13 @@ public class ModifiersScreen extends Screen {
         // Right-side settings
         if (selectedIndex >= 0 && selectedIndex < filteredModifiers.size()) {
             int sx = px + SET_OX;
-            int sy = py + 24;
+            int sy = py + HEADER_H + 10;
             settingsPanel.buildWidgets(filteredModifiers.get(selectedIndex), sx, sy);
         }
 
-        addRenderableWidget(Button.builder(Component.literal("Close"), btn -> onClose())
-                .bounds(px + PANEL_W - 74, py + PANEL_H - 22, 70, 16)
-                .build());
+        addRenderableWidget(ScreenWidgets.primaryButton(
+                px + PANEL_W - PAD - 66, py + PANEL_H - FOOTER_H + 6, 66, 16,
+                Component.literal("Close"), btn -> onClose()));
     }
 
     // =========================================================================
@@ -100,8 +103,8 @@ public class ModifiersScreen extends Screen {
 
     private void buildListWidgets(int px, int py) {
         List<IModifier> modifiers = filteredModifiers;
-        int lx = px + 4;
-        int rowBase = py + 24;
+        int lx = px + PAD;
+        int rowBase = py + HEADER_H + 10;
         int count = modifiers.size();
 
         for (int i = 0; i < count; i++) {
@@ -113,17 +116,17 @@ public class ModifiersScreen extends Screen {
             widgets.addCheckbox(lx + 2, ry + 7, "", modifier.isEnabled(),
                     () -> { modifier.setEnabled(!modifier.isEnabled()); rebuildWidgets(); });
 
-            Button upBtn = addRenderableWidget(Button.builder(Component.literal("↑"),
+            Button upBtn = addRenderableWidget(ScreenWidgets.flatBuilder(Component.literal("↑"),
                             btn -> { ModifierSystem.CLIENT.moveModifier(realIdx, -1); selectedIndex = filteredIdx - 1; rebuildWidgets(); })
                     .bounds(lx + LIST_W - 44, ry + 4, 12, 14).build());
             if (filteredIdx == 0) upBtn.active = false;
 
-            Button downBtn = addRenderableWidget(Button.builder(Component.literal("↓"),
+            Button downBtn = addRenderableWidget(ScreenWidgets.flatBuilder(Component.literal("↓"),
                             btn -> { ModifierSystem.CLIENT.moveModifier(realIdx, +1); selectedIndex = filteredIdx + 1; rebuildWidgets(); })
                     .bounds(lx + LIST_W - 30, ry + 4, 12, 14).build());
             if (filteredIdx == count - 1) downBtn.active = false;
 
-            addRenderableWidget(Button.builder(Component.literal("×"),
+            addRenderableWidget(ScreenWidgets.flatBuilder(Component.literal("×"),
                             btn -> {
                                 ModifierSystem.CLIENT.removeModifier(realIdx);
                                 if (selectedIndex >= filteredModifiers.size() - 1) selectedIndex = filteredModifiers.size() - 2;
@@ -133,8 +136,8 @@ public class ModifiersScreen extends Screen {
         }
 
         // Add buttons
-        int addY = py + PANEL_H - 22;
-        addRenderableWidget(Button.builder(Component.literal("+ Mirror"), btn -> {
+        int addY = py + PANEL_H - FOOTER_H + 6;
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.literal("+ Mirror"), btn -> {
             MirrorModifier mirror = new MirrorModifier();
             var pos = playerBlockPos();
             mirror.originX = pos.getX(); mirror.originY = pos.getY(); mirror.originZ = pos.getZ();
@@ -145,7 +148,7 @@ public class ModifiersScreen extends Screen {
             rebuildWidgets();
         }).bounds(px + 4, addY, 58, 16).build());
 
-        addRenderableWidget(Button.builder(Component.literal("+ Array"), btn -> {
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.literal("+ Array"), btn -> {
             ArrayModifier array = new ArrayModifier();
             array.setDimension(currentDimension());
             ModifierSystem.CLIENT.addModifier(array);
@@ -154,7 +157,7 @@ public class ModifiersScreen extends Screen {
             rebuildWidgets();
         }).bounds(px + 66, addY, 52, 16).build());
 
-        addRenderableWidget(Button.builder(Component.literal("+ Radial"), btn -> {
+        addRenderableWidget(ScreenWidgets.flatBuilder(Component.literal("+ Radial"), btn -> {
             RadialMirrorModifier radial = new RadialMirrorModifier();
             var pos = playerBlockPos();
             radial.originX = pos.getX(); radial.originY = pos.getY(); radial.originZ = pos.getZ();
@@ -177,8 +180,8 @@ public class ModifiersScreen extends Screen {
         if (widgets.handleCheckboxClick(mouseX, mouseY)) return true;
 
         int px = panelX(), py = panelY();
-        int lx = px + 4;
-        int rowBase = py + 24;
+        int lx = px + PAD;
+        int rowBase = py + HEADER_H + 10;
 
         for (int i = 0; i < filteredModifiers.size(); i++) {
             int ry = rowBase + i * ROW_H;
@@ -206,7 +209,16 @@ public class ModifiersScreen extends Screen {
 
     @Override
     public void renderBackground(GuiGraphics guiGraphics, int mouseX, int mouseY, float partialTick) {
-        guiGraphics.fill(0, 0, this.width, this.height, 150 << 24);
+        guiGraphics.fill(0, 0, this.width, this.height, Ui.BG_SCREEN);
+        int px = panelX(), py = panelY();
+        ScreenWidgets.drawDarkPanel(guiGraphics, px, py, PANEL_W, PANEL_H);
+        // Header bar
+        guiGraphics.fill(px + 1, py + 1, px + PANEL_W - 1, py + HEADER_H, Ui.BG_CARD);
+        guiGraphics.fill(px + 1, py + HEADER_H, px + PANEL_W - 1, py + HEADER_H + 1, Ui.BORDER);
+        // Footer bar
+        int fy = py + PANEL_H - FOOTER_H;
+        guiGraphics.fill(px + 1, fy, px + PANEL_W - 1, py + PANEL_H - 1, Ui.BG_CARD);
+        guiGraphics.fill(px + 1, fy, px + PANEL_W - 1, fy + 1, Ui.BORDER);
     }
 
     @Override
@@ -216,29 +228,30 @@ public class ModifiersScreen extends Screen {
         int px = panelX(), py = panelY();
         int divX = px + DIV_OX;
 
-        // Divider
-        graphics.fill(divX, py + 2, divX + 1, py + PANEL_H - 2, 0xFF555555);
+        // Vertical divider between list and settings
+        graphics.fill(divX, py + HEADER_H + 1, divX + 1, py + PANEL_H - FOOTER_H, Ui.BORDER);
 
-        // Headers
-        graphics.drawString(font, "Modifiers", px + 5, py + 8, 0xFFFFFF);
+        // Header titles
+        graphics.drawString(font, "Modifiers", px + PAD, py + 8, 0xFFFFFF);
         String settingsHeader = (selectedIndex >= 0 && selectedIndex < filteredModifiers.size())
                 ? filteredModifiers.get(selectedIndex).getDisplayName().getString() + " Settings"
                 : "Settings";
-        graphics.drawString(font, settingsHeader, divX + 5, py + 8, 0xFFFFFF);
+        graphics.drawString(font, settingsHeader, divX + 10, py + 8, Ui.ACCENT);
 
         // List rows
-        int lx = px + 4;
-        int rowBase = py + 24;
+        int lx = px + PAD;
+        int rowBase = py + HEADER_H + 10;
         if (filteredModifiers.isEmpty()) {
-            graphics.drawString(font, "Add a modifier below.", lx + 2, rowBase + 7, 0x888888);
+            graphics.drawString(font, "Add a modifier below.", lx + 2, rowBase + 7, Ui.MUTED);
         } else {
             for (int i = 0; i < filteredModifiers.size(); i++) {
                 int ry = rowBase + i * ROW_H;
                 if (i == selectedIndex) {
-                    graphics.fill(lx, ry, lx + LIST_W, ry + ROW_H - 1, 0x40FFFFFF);
+                    graphics.fill(lx, ry, lx + LIST_W, ry + ROW_H - 1, Ui.AMBER_SURFACE);
+                    graphics.renderOutline(lx, ry, LIST_W, ROW_H - 1, Ui.AMBER_BORDER);
                 }
                 graphics.drawString(font, filteredModifiers.get(i).getDisplayName().getString(),
-                        lx + 20, ry + 7, 0xEEEEEE);
+                        lx + 20, ry + 7, i == selectedIndex ? Ui.ACCENT : 0xE4E7EE);
             }
         }
 

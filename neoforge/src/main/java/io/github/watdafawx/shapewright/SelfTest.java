@@ -110,6 +110,7 @@ public final class SelfTest {
             out.add(framedSlopeScenario());
         }
         out.add(ShapeUiShots.scenario());
+        out.add(surfaceDesignerScenario());
         out.add(ReadmeShots.scenario());
         if (GhostBridgeTest.present()) out.add(GhostBridgeTest.scenario());
         // EB_SELFTEST_ONLY=shape-ui (comma separated) runs just those scenarios, for quick iteration
@@ -120,6 +121,50 @@ public final class SelfTest {
     /** Runs in the player's real world via the command: never destroy anything here. */
     private static void manualSuite(List<Seq> out) {
         out.add(new Seq("manual-ghost-scan").check("client-matches-server", SelfTest::ghostDiff));
+    }
+
+    // ---- SURFACE DESIGNER (Floor / Wall / Ceiling) ----------------------------------------------------
+
+    private static Seq surfaceDesignerScenario() {
+        Seq seq = new Seq("surface-designer");
+        io.github.watdafawx.shapewright.screen.FloorDesignerScreen[] ref = {null};
+        String[][] beforeMatch = {null};
+        seq.run(() -> {
+            var screen = new io.github.watdafawx.shapewright.screen.FloorDesignerScreen(
+                    null, io.github.watdafawx.shapewright.screen.FloorDesignerScreen.Tab.FLOOR, name -> {});
+            ref[0] = screen;
+            Minecraft.getInstance().setScreen(screen);
+        }).waitTicks(SHOT_DELAY + 6).check("surface-designer-floor", () ->
+                Minecraft.getInstance().screen == ref[0]
+                        && ref[0].currentTab() == io.github.watdafawx.shapewright.screen.FloorDesignerScreen.Tab.FLOOR
+                        ? List.of() : List.of("floor tab not active"))
+          .run(() -> ref[0].randomizePalette())
+          .waitTicks(SHOT_DELAY + 4).check("surface-designer-random-palette", () -> {
+                beforeMatch[0] = ref[0].currentSlotBlocks();
+                return beforeMatch[0].length == 5 ? List.of() : List.of("invalid palette");
+          })
+          .run(() -> {
+                ref[0].setSlotLocked(0, true);
+                ref[0].setSlotLocked(1, true);
+                ref[0].matchLockedPalette();
+          })
+          .waitTicks(SHOT_DELAY + 4).check("surface-designer-match-locked", () -> {
+                String[] after = ref[0].currentSlotBlocks();
+                if (!after[0].equals(beforeMatch[0][0]) || !after[1].equals(beforeMatch[0][1])) {
+                    return List.of("locked Base/Primary changed");
+                }
+                return List.of();
+          })
+          .run(() -> ref[0].selectTab(io.github.watdafawx.shapewright.screen.FloorDesignerScreen.Tab.WALL))
+          .waitTicks(SHOT_DELAY + 4).check("surface-designer-wall", () ->
+                ref[0].currentTab() == io.github.watdafawx.shapewright.screen.FloorDesignerScreen.Tab.WALL
+                        ? List.of() : List.of("wall tab not active"))
+          .run(() -> ref[0].selectTab(io.github.watdafawx.shapewright.screen.FloorDesignerScreen.Tab.CEILING))
+          .waitTicks(SHOT_DELAY + 4).check("surface-designer-ceiling", () ->
+                ref[0].currentTab() == io.github.watdafawx.shapewright.screen.FloorDesignerScreen.Tab.CEILING
+                        ? List.of() : List.of("ceiling tab not active"))
+          .run(() -> Minecraft.getInstance().setScreen(null));
+        return seq;
     }
 
     // ---- ROOF and FRUSTUM in the world ----------------------------------------------------------------

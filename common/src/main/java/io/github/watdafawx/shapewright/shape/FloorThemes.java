@@ -50,7 +50,19 @@ public final class FloorThemes {
                     "minecraft:blackstone", "minecraft:sea_lantern"}),
             new Theme("deepslate_quartz", null, new String[]{
                     "minecraft:polished_deepslate", "minecraft:quartz_block", "minecraft:cyan_terracotta",
-                    "minecraft:deepslate_bricks", "minecraft:shroomlight"})
+                    "minecraft:deepslate_bricks", "minecraft:shroomlight"}),
+            new Theme("gothic_cathedral", null, new String[]{
+                    "minecraft:stone_bricks", "minecraft:deepslate_bricks", "minecraft:polished_andesite",
+                    "minecraft:chiseled_stone_bricks", "minecraft:sea_lantern"}),
+            new Theme("tudor_manor", null, new String[]{
+                    "minecraft:white_terracotta", "minecraft:dark_oak_log", "minecraft:cobblestone",
+                    "minecraft:stripped_spruce_log", "minecraft:ochre_froglight"}),
+            new Theme("nether_palace", null, new String[]{
+                    "minecraft:polished_blackstone_bricks", "minecraft:crimson_planks", "minecraft:gilded_blackstone",
+                    "minecraft:nether_bricks", "minecraft:shroomlight"}),
+            new Theme("prismarine_temple", null, new String[]{
+                    "minecraft:prismarine_bricks", "minecraft:dark_prismarine", "minecraft:smooth_quartz",
+                    "minecraft:oxidized_cut_copper", "minecraft:sea_lantern"})
     );
 
     private static List<Theme> loaded = null;
@@ -89,5 +101,32 @@ public final class FloorThemes {
             }
         }
         loaded = List.copyOf(new ArrayList<>(byId.values()));
+    }
+
+    /** Saves a custom 5-block theme to {@code config/shapewright/floor_themes.json} and reloads. */
+    public static void saveCustomTheme(String id, String displayName, String[] blocks) throws IOException {
+        if (blocks == null || blocks.length < 5) return;
+        JsonArray arr = new JsonArray();
+        if (Files.isRegularFile(FILE)) {
+            try {
+                JsonArray existing = GSON.fromJson(Files.readString(FILE), JsonArray.class);
+                if (existing != null) {
+                    for (JsonElement el : existing) {
+                        if (el.isJsonObject() && id.equals(el.getAsJsonObject().get("id").getAsString())) continue;
+                        arr.add(el);
+                    }
+                }
+            } catch (IOException | RuntimeException ignored) {}
+        }
+        JsonObject obj = new JsonObject();
+        obj.addProperty("id", id);
+        obj.addProperty("name", displayName);
+        JsonArray bArr = new JsonArray();
+        for (int i = 0; i < 5; i++) bArr.add(blocks[i]);
+        obj.add("blocks", bArr);
+        arr.add(obj);
+        Files.createDirectories(FILE.getParent());
+        Files.writeString(FILE, GSON.toJson(arr));
+        reload();
     }
 }
