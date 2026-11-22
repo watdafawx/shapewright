@@ -14,7 +14,7 @@ import java.util.Set;
 
 /**
  * Generates harmonious 5-slot architectural palettes ({@code [base, primary, secondary, trim, accent]})
- * either completely at random or matched to any locked anchor slots (e.g. Base & Primary, or any subset).
+ * either completely at random or matched to any locked anchor slots (e.g. Base and Primary, or any subset).
  */
 public final class SurfacePaletteGenerator {
 
